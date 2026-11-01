@@ -2,11 +2,21 @@
 
 <OberliPreset name="Init" author="Oberli Audio" category="Bed"
               description="The parameter table's defaults."
-              pluginVersion="0.1.0" created="{{Date}}" factory="true">
-  <{{ProductId}}State version="1" dspVersion="1">
+              pluginVersion="0.1.0" created="2026-11-01" factory="true">
+  <ABSeeState version="1" dspVersion="1">
     <PARAMETERS>
-{{InitParams}}
+      <PARAM id="listen" value="0"/>
+      <PARAM id="refSlot" value="1"/>
+      <PARAM id="matchMode" value="0"/>
+      <PARAM id="blind" value="0"/>
+      <PARAM id="trim" value="0"/>
+      <PARAM id="mono" value="0"/>
+      <PARAM id="followTransport" value="1"/>
+      <PARAM id="trimMixInstead" value="0"/>
+      <PARAM id="section" value="5"/>
+      <PARAM id="matchTarget" value="-14"/>
+      <PARAM id="bypass" value="0"/>
     </PARAMETERS>
     <Extra/>
-  </{{ProductId}}State>
+  </ABSeeState>
 </OberliPreset>

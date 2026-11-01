@@ -53,11 +53,11 @@
     }
   ],
   "buildPresets": [
-    { "name": "release", "configurePreset": "release", "configuration": "Release", "targets": [ "{{ProductId}}_VST3", "{{ProductId}}_Standalone", "{{ProductId}}Harness" ] },
-    { "name": "debug", "configurePreset": "debug", "targets": [ "{{ProductId}}_VST3", "{{ProductId}}Harness" ] },
-    { "name": "asan", "configurePreset": "asan", "targets": [ "{{ProductId}}_VST3", "{{ProductId}}Harness" ] },
-    { "name": "tsan", "configurePreset": "tsan", "targets": [ "{{ProductId}}_VST3", "{{ProductId}}Harness" ] },
-    { "name": "rtsan", "configurePreset": "rtsan", "targets": [ "{{ProductId}}Harness" ] }
+    { "name": "release", "configurePreset": "release", "configuration": "Release", "targets": [ "ABSee_VST3", "ABSee_Standalone", "ABSeeHarness" ] },
+    { "name": "debug", "configurePreset": "debug", "targets": [ "ABSee_VST3", "ABSeeHarness" ] },
+    { "name": "asan", "configurePreset": "asan", "targets": [ "ABSee_VST3", "ABSeeHarness" ] },
+    { "name": "tsan", "configurePreset": "tsan", "targets": [ "ABSee_VST3", "ABSeeHarness" ] },
+    { "name": "rtsan", "configurePreset": "rtsan", "targets": [ "ABSeeHarness" ] }
   ],
   "testPresets": [
     { "name": "fast", "configurePreset": "release", "filter": { "include": { "label": "fast" } }, "output": { "outputOnFailure": true } },
