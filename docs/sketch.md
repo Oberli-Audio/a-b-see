@@ -32,7 +32,7 @@ Tier S, gate G0-G2 sketch. Oberli Audio effect, Bone theme, accent Peacock #039B
 2. **Hero** is what the ear cannot judge: the seven band deltas and the match readout "Reference -1.4 dB". The Listen switch is big because the hand needs it, but it carries no information.
 3. **Accent** Peacock, only on what is active: the selected Listen segment, lit LEDs, the chosen section chip, the reference curve, the delta bars, the knob pointer and the readout's delta value (on Bone the readout is the charcoal bubble, so accent text is allowed there, 4.9:1 against #1C1B19).
 4. **Sections** from the parameter table's group order: References, Listen, Balance, Output. Output column last on the right with Trim at 64 px and the LUFS S meter; no Mix knob because this plugin has no wet path (one line to add to the brand sheet: utility plugins without a wet path omit Mix; the output column holds their output knob and meter).
-5. **States**: modified (preset pill dims when the match mode or slot differs from the preset), drawer (preset drawer from the left, 380 px), About (charcoal page behind the effect), bypass (hard bypass = wire), rendering (header shows "Rendering" in `ink-subtle`, Listen segment greyed), blind (Listen reads X / Y, slot names hidden, tally in the readout), no reference loaded (Listen segment disabled, "Drop a file here" row stays visible).
+5. **States**: modified (preset pill dims when the match mode or slot differs from the preset), drawer (preset drawer from the left, 380 px), About (charcoal page behind the effect), bypass (hard bypass = wire), rendering (header shows "Rendering" in `ink-subtle`, Listen segment grayed), blind (Listen reads X / Y, slot names hidden, tally in the readout), no reference loaded (Listen segment disabled, "Drop a file here" row stays visible).
 
 ## 3. Parameter table (sketch, six columns)
 
@@ -139,8 +139,7 @@ reference RAM ─ section loop / transport map ─ gain (match) ─ meter ─┘
 ## 7. Open decisions for Björn
 - Name: A B see (decided 2026-11-01). Slug `a-b-see`, plugin ID `ABSee`, folders "A B see".
 - Accent: Peacock #039BE5, by the category scheme (decided 2026-11-01): one accent per category, analysis and monitoring.
-- Should "Trim mix instead" default to on for mastering use? The sketch says off because the promise of the Listen switch is "the reference comes to you".
-- Section markers per reference (four) or global (one set for all)? The sketch says per reference; a chorus sits at a different time in every song.
+- Decided 2026-11-01: "Trim mix instead" defaults to off; section markers are per reference.
 - Tier: P as the default, F if it becomes Björn's daily tool for the worship masters (it probably will).
 
 ## 8. Report
@@ -150,6 +149,6 @@ Hosts: n/a at S (P: Ableton Live 10.1 under Rosetta, Ableton Live on Windows)
 Brand sheet: deviates: output column without Mix knob (utility plugin without wet path), line proposed for the sheet; logo in the frame is a CSS stand-in for the Logo SVG
 What works well: hero is information (deltas, match readout), not the switch; the match readout always states what was done and to which side; render safety is a structural decision, not a checkbox
 Findings: none at S (hard rules only; no snapshot pass yet)
-Open / recommended: name and accent (Schwere 1); per-reference sections (2); Trim-mix default (2)
+Open / recommended: none
 Evidence: a-b-see@1x.png at 100 %, a-b-see@2x.png
 ```
