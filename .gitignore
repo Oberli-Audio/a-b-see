@@ -67,6 +67,8 @@ __pycache__/
 /sound design/panel/
 *.wav
 !tests/golden/*.wav
+!/tools/tests/golden/*.wav
+!/tests/state/*.wav
 *.aif
 *.aiff
 *.mp3

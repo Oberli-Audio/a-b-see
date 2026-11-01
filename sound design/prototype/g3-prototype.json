@@ -1,0 +1,92 @@
+[
+  {
+    "case": "kweighting-rates",
+    "value": 0.020344372417433476,
+    "unit": "LU",
+    "threshold": "<= 0.1 LU vs -23 LUFS",
+    "ok": true,
+    "command": "python3 \"sound design/prototype/proto_measure.py\" --case kweighting-rates",
+    "note": "44100:-22.99 48000:-22.99 88200:-23.01 96000:-23.01 176400:-23.02 192000:-23.02"
+  },
+  {
+    "case": "loop-seam",
+    "value": -34.139960320302535,
+    "unit": "dB",
+    "threshold": "<= -30 dB max_click",
+    "ok": true,
+    "command": "python3 \"sound design/prototype/proto_measure.py\" --case loop-seam",
+    "note": "the same loop without the seam fade reads -0.0 dB; the sine's own slope floor is -37.7 dB"
+  },
+  {
+    "case": "match-integrated",
+    "value": 0.06992348749274413,
+    "unit": "LU",
+    "threshold": "<= 0.10 LU",
+    "ok": true,
+    "command": "python3 \"sound design/prototype/proto_measure.py\" --case match-integrated",
+    "note": "readout 'Reference +6.1 dB', residual of the rendered output against the mix -59.4 dBFS (0.1 dB of gain error = -38.7 dBFS)"
+  },
+  {
+    "case": "match-short",
+    "value": 0.0302714235259387,
+    "unit": "LU",
+    "threshold": "<= 0.10 LU",
+    "ok": true,
+    "command": "python3 \"sound design/prototype/proto_measure.py\" --case match-short",
+    "note": "readout 'Reference +6.0 dB', residual of the rendered output against the mix -66.8 dBFS (0.1 dB of gain error = -38.7 dBFS)"
+  },
+  {
+    "case": "match-target",
+    "value": 0.0068888299034437495,
+    "unit": "LU",
+    "threshold": "<= 0.30 LU",
+    "ok": true,
+    "command": "python3 \"sound design/prototype/proto_measure.py\" --case match-target",
+    "note": "mix -14.00 LUFS, reference -14.01 LUFS, target -14.0"
+  },
+  {
+    "case": "match-truepeak",
+    "value": 3.552713678800501e-15,
+    "unit": "dB",
+    "threshold": "<= 0.10 dB",
+    "ok": true,
+    "command": "python3 \"sound design/prototype/proto_measure.py\" --case match-truepeak",
+    "note": "readout 'Reference +6.0 dB', residual of the rendered output against the mix -331.1 dBFS (0.1 dB of gain error = -38.7 dBFS)"
+  },
+  {
+    "case": "render-null",
+    "value": -400.0,
+    "unit": "dBFS",
+    "threshold": "bit-exact (-400)",
+    "ok": true,
+    "command": "python3 \"sound design/prototype/proto_measure.py\" --case render-null",
+    "note": "wire forced"
+  },
+  {
+    "case": "switch-click",
+    "value": 0.0,
+    "unit": "dB",
+    "threshold": "<= 0.01 dB over peak",
+    "ok": true,
+    "command": "python3 \"sound design/prototype/proto_measure.py\" --case switch-click",
+    "note": "equal-gain 5 ms: +0.0000 dB over peak, max_click -17.7 dB | same law 10 ms: +0.0000 dB, -17.7 dB (departure 1 holds while 5 ms is within 0.5 dB of 10 ms) | equal-power 5 ms would be +3.0086 dB (departure 3) | uncorrelated sides peak -12.00 dBFS"
+  },
+  {
+    "case": "transport-drift",
+    "value": 0.0,
+    "unit": "ms",
+    "threshold": "<= 1 ms over 60 s",
+    "ok": true,
+    "command": "python3 \"sound design/prototype/proto_measure.py\" --case transport-drift",
+    "note": "60 impulses over 60 s, worst deviation 0.000 ms"
+  },
+  {
+    "case": "wire-null",
+    "value": -400.0,
+    "unit": "dBFS",
+    "threshold": "bit-exact (-400)",
+    "ok": true,
+    "command": "python3 \"sound design/prototype/proto_measure.py\" --case wire-null",
+    "note": "bit-exact"
+  }
+]
