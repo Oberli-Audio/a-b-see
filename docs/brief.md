@@ -1,57 +1,67 @@
-# Sonic brief (owner-confirmed <date>; amend below, never edit the YAML)
+# Sonic brief (owner-confirmed 2026-11-01 from the decided Tier S sketch, docs/sketch.md; amend below, never edit the YAML)
 
 ```yaml
-name:
-track:           # instrument | effect | control | analysis  -- which playbook file leads
-stages:          # the signal-flow stages it owns (F.0): control, generation, processing,
-                 # mix, output, analysis - each brings its contract and tests
-type:            # synth | acoustic-emulation | dynamics | eq | creative-fx | utility | meter | midi-fx
-musical_role:    # rhythm | bass | harmonic-bed | melodic | texture | effect  -- briefs I.7
-tier:            # S (sketch) | P (product) | F (flagship)  -- tiers.md, F.0.1
-one_sentence:
-references:      # 2-3 named products and how this differs
+name: A B see
+track: analysis
+stages: [processing, output, analysis]
+type: utility
+musical_role: effect
+tier: P
+one_sentence: Switches the master between your mix and a reference track at matched loudness, click-free, and shows per band how far apart they are; a bounce is always the untouched mix.
+references:
+  - ADPTR Metric AB: same job; A B see is free, Ableton-only, with blind X/Y and per-reference sections
+  - Mastering The Mix REFERENCE 3: same job; A B see adds true-peak matching and a forced wire on render
+  - Melda MCompare: compares plugin chains, not reference files
 must_do:
-defining_features:  # the audible features that make it *this* product; each one
-                    # gets a presence test (rule 13), e.g. "Expanse carries a +1 oct shimmer"
-out_of_scope:
-core_controls:   # 3-5, with what each does sonically
-signal_flow:     # ASCII block diagram
-cpu_budget:      # rule 20, per instance: { p999_pct: 25, max_pct: 50, idle_pct: 2,
-                 #   at: 48k/64 (F adds 44.1k/32), slice: x86_64-rosetta, preset: heaviest }
-cpu_reference_machine:  # the concrete machine the budget is written for (F.14.4)
-instances_expected:     # realistic count per project / live rig
-latency_budget:  # samples, and whether latency is acceptable at all
-sample_rates:    [44100, 48000, 88200, 96000, 176400, 192000]
-channels:        # mono | stereo | mono-to-stereo
-register:        # instruments: the lowest and highest key it plays, e.g. C0-C7 - set by
-                 # listening at P and F (I.2.3), silent outside it; re-asked after any
-                 # sound-design pass that moves the bass or the top
-register_intent: # per register, what the sound should do (I.2, F.4), e.g.
-                 #   below C3: tight, mono, dark - foundation, no phasing
-                 #   C3-C5: the voiced sound
-                 #   above C5: opens but never shrill
-presets:         # F.14.3
-  bank_size:          # P: 12-20 instrument / 8-12 effect; F: 30-60
-  categories:         # the fixed list, e.g. [Bed, Motion, Dark, Bright, Keys-like, FX]
-  reference_chord:    # default C3-E3-G3-C4, velocity 100, 4 s hold, 4 s tail
-  loudness_window:    # default short-term max over the hold; pads: from end of attack to note-off
-  edge_presets:       # the 3-4 the translation battery runs on (widest, darkest, most reverb, loudest bass)
-  naming:             # ships in English; voice of the product
-mix_context:     # what it plays with, and the band it must leave free, e.g.
-                 #   "under acoustic guitar, piano, group vocals: leave 1-4 kHz,
-                 #    keep 200-500 Hz no hotter than the voiced default"
-quality_targets: # every target is a pair: the threshold AND the method that
-                 # measures it on this instrument. A target with no working method
-                 # is found out at G3, which is too late.
-  alias_floor_db:     { target: , method: }   # ASR/NMR only for harmonic output; else B.5 rate comparison
-  thd_n_db:           { target: , method: }
-  response_error_db:  { target: , method: }
-  loudness:           { target: , method: }   # e.g. presets -18 LUFS +/-1 LU, F.13.9 protocol
-  keyboard_span_lu:   { target: , method: }   # e.g. < 6 LU per layer over the register, F.13.10
-  low_register:       { target: , method: }   # e.g. roughness at C2 no worse than 3x C4, register battery 1.4
+  - Loudness-match the reference to the mix within 0.1 LU (Integrated, Short 3 s) or 0.1 dB (True peak)
+  - Switch Mix/Reference with a 5 ms equal-power crossfade, no click
+  - Render (isNonRealtime) is always the wire, whatever state the plugin was left in
+  - Up to 8 references with 4 sections each plus Loudest 10 s, looped, following the transport or free-running
+  - Blind X/Y with a tally
+defining_features:
+  - Bounce null: a bounce left in Reference mode, Blind on, Trim +6 dB nulls against the plugin removed
+  - Match readout states what was done, to which side, in dB ("Reference -1.4 dB")
+  - Seven band deltas (mix minus reference, level matched) as the hero
+out_of_scope: [EQ matching or "make it like the reference", streaming pass/fail presets, cloud reference library]
+core_controls:
+  - Listen: Mix or Reference at matched loudness
+  - Reference: which of 8 slots plays
+  - Match: Integrated, Short 3 s, True peak, Off
+  - Blind: hides which side is which, keeps a tally
+  - Trim: monitoring level of both sides, forced to 0 dB on render
+signal_flow: |
+  in --+----------------------- (wire) ---------------+
+       +-- meter (LUFS I/S, TP, PSR, spectrum, width) |-- crossfade 5 ms -- Trim -- out
+  reference RAM -- section loop / transport map -- match gain -- meter --+
+cpu_budget: { p999_pct: 25, max_pct: 50, idle_pct: 2, at: 48k/64, slice: x86_64-rosetta, preset: Init with reference playing and editor open }
+cpu_reference_machine: Apple M3 Pro (Björn's Mac)
+instances_expected: 1 per project, last device on the master
+latency_budget: 0 samples in every mode
+sample_rates: [44100, 48000, 88200, 96000, 176400, 192000]
+channels: stereo
+register: n/a (effect)
+register_intent: n/a
+presets:
+  bank_size: 8
+  categories: [Mastering, Mixing, Live]
+  reference_chord: n/a; test material is the harness's pink noise and the bundled test songs
+  loudness_window: n/a (Trim 0 dB in every preset)
+  edge_presets: [True Peak Compare, Short-Term Verse, Blind Session]
+  naming: English, by use ("Master vs Reference", "Verse Check Short-Term")
+mix_context: last on the Ableton master after the limiter; never colours the mix; the reference never reaches a bounce
+quality_targets:
+  alias_floor_db:     { target: n/a, method: n/a (no nonlinear processing) }
+  thd_n_db:           { target: wire, method: bit-exact null of the mix path in Mix mode }
+  response_error_db:  { target: 0.1 LU match, method: harness renders the mix as its own reference at -6 dB; readout must say Reference +6.0 dB }
+  loudness:           { target: BS.1770-4 within 0.1 LU of a reference meter, method: EBU Tech 3341 test signals through the harness }
+  keyboard_span_lu:   { target: n/a, method: n/a }
+  low_register:       { target: n/a, method: n/a }
   other:
-open_questions:
+    - "switch click: 1 kHz sine both sides, 200 switches, no sample above peak + 0.01 dB"
+    - "render null: harness offline render in every state equals the input"
+    - "memory: 8 slots loaded, at most 2 decoded buffers resident"
+open_questions: []
 ```
 
 ## Amendments
-- <date>: <what changed, why, which gates re-open>
+- 2026-11-01: Owner decisions confirmed with the brief: "Trim mix instead" defaults to off; section markers are per reference; references live in the shared Oberli Audio/References/ folder with Bench Line; Loudness and References come from the shared Source/oberli/ code (bob-skills), not written here.
