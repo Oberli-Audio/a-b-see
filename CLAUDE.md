@@ -6,7 +6,7 @@ Guidance for Claude Code in this repository.
 
 A B see (Oberli Audio), an effect plugin (VST3; the formats ship.toml lists), built with
 JUCE pinned by commit (CMakeLists.txt) and started from the family template
-(Oberli-Audio/plugin-template). Theme bone, accent jade (#3FCF9E), plugin code
+(Oberli-Audio/plugin-template). Theme bone, accent peacock (#039BE5; category accent for analysis and monitoring, decided 2026-11-01, registry update pending in bob-skills), plugin code
 `Abse`, bundle id `com.oberliaudio.absee`: all from the family registry (ship-bob
 `registry/plugins.toml`), never changed after the first release.
 
