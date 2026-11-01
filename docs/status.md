@@ -78,6 +78,26 @@ The Integrated match error is bounded by the 0.1 LU hysteresis by construction (
 the gain only moves when the reading moves by more than 0.1 LU), so 0.070 LU is the
 hysteresis band, not noise. Short 3 s has no hysteresis and reads 0.030 LU.
 
+## Rule 13: every presence test shown failing on the build with its defect (D.3.8)
+Two scratch builds in the working tree (restored afterwards; `git status` clean, `ctest
+--preset all` 5/5 again). Each defect is one line; the tests are grouped so that no defect in
+a build can explain another's failure.
+
+| Build | Planted defect | Test that failed | What it said |
+|---|---|---|---|
+| A | `wireOnly = false` (render safety off) | `test_render_is_always_the_wire` | "the plugin did not notice the offline render" |
+| A | `FadeLaw::equalPower` on the switch | `test_switch_does_not_overshoot` | "the switch overshot by +3.0086 dB" - the same number the prototype measured at G3 |
+| A | `kSeamFadeSeconds = 0.0` | `test_loop_seam_is_not_a_step` | "the loop seam reads -0.0 dB" |
+| B | `readout()` returns a bare number | `test_match_readout_says_what_it_did` | "the readout must name the side and carry a sign: '6.0'" |
+| B | `trimSmoothed.reset(trim + 0.001f)` (a gain sneaks into the wire) | `test_mix_mode_is_bit_exact_wire` | "Mix mode is not the wire: residual -103.4 dBFS" |
+| B | `player.setAlign(0, 0)` | `test_align_pair_shifts_the_reference` | "0.0 != 0.5 within 0.002 delta" |
+| B | no eviction in `ReferenceStore::setActive` | `test_at_most_two_references_are_resident` | "3 not less than or equal to 2" |
+| B | the blind draw constant | `test_blind_assignment_is_seeded` | "Items in the second set but not the first: True" |
+
+`test_plugin_matches_the_prototype` also failed in build B, as it must: the trim offset is a
+real difference from the prototype. The remaining tests are contract and health checks, which
+guard defects the harness itself reports (NaN, latency, state) rather than a feature.
+
 ## Listening debt
 - 2026-11-01: nothing heard yet in this session (no audio device, no macOS). Every render is
   on disk under `sound design/renders/` for the listening checkpoint above.
@@ -89,14 +109,16 @@ hysteresis band, not noise. Short 3 s has no hysteresis and reads 0.030 LU.
 Task: build A B see from G1 to a validated Tier P plugin, shared modules aside.
 Plan: 1. [x] G1 decisions 2. [x] G2 numpy prototype 3. [x] G3 measure the prototype (10/10)
 4. [x] G4 port to C++ with the seams and the harness hooks 5. [x] test suite (fast 16 tests
-/ 46 s, render 15 tests / 65 s) 6. [x] preset bank (9, lint green) 7. [x] G5 null against the
-prototype 8. [x] one committed golden 9. [ ] prove each presence test on a planted-defect
-build (D.3.8) (next) 10. [ ] README, CHANGELOG and notices for the friends (ship-bob)
-11. [ ] on Björn's Mac: validators, malloc trap, perf row, the two hosts.
-Working tree: clean at the last commit. Build: green (Linux/x86_64, GCC 13).
-Tests: 5/5 ctest targets pass; 31 tests in the suite, 1 skip is gone (the golden exists now).
+/ 50 s, render 15 tests / 70 s) 6. [x] preset bank (9, lint green) 7. [x] G5 null against the
+prototype 8. [x] one committed golden 9. [x] every presence test proven on a planted-defect
+build (table above) 10. [ ] **paused here 2026-11-01 at Björn's request; the work continues in
+a Visual Studio Code session on his Mac: `docs/continue.md` is the prompt to paste** 11. [ ] the
+editor, when `Source/oberli/` lands (plugin-ui-bob) 12. [ ] README, CHANGELOG, notices
+(ship-bob) 13. [ ] on the Mac: validators, malloc trap / RTSan, the perf row, the two hosts.
+Working tree: clean. Build: green (Linux/x86_64, GCC 13 - **not** a slice that ships).
+Tests: `ctest --preset all` -> 5/5 (fast 50 s, render 70 s, three lints).
 Open questions for the owner: the Waiting-for-Björn lines above.
-Next command: `ctest --preset all`
+Next command: `cmake --preset release && cmake --build --preset release && ctest --preset all`
 
 The prototype's renders are **not** committed: `.gitignore` keeps WAVs out of this repo
 (project policy, CLAUDE.md) and the renders are reproducible in one seeded command
