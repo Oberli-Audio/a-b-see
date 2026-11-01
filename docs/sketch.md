@@ -19,7 +19,7 @@ Tier S, gate G0-G2 sketch. Oberli Audio effect, Bone theme, accent Peacock #039B
 
 **The five core controls.** Listen (Mix / Reference), Reference slot (1-8), Match (Integrated / Short 3 s / True peak / Off), Blind, Trim. Everything else is editor state or lives in the drawer.
 
-**CPU and latency budget.** Zero latency reported to the host in every mode. Idle with editor open: 1 % or less. Playing a reference with the analyser running: 3 % on an M1 at 48 kHz, 128 samples. Reference files are decoded once on load into RAM (float32, resampled to the session rate on load, not per block).
+**CPU and latency budget.** Zero latency reported to the host in every mode. Idle with editor open: 1 % or less. Playing a reference with the analyzer running: 3 % on an M1 at 48 kHz, 128 samples. Reference files are decoded once on load into RAM (float32, resampled to the session rate on load, not per block).
 
 **Three structural decisions (sound side).**
 1. The mix path is a wire. In Mix mode no gain stage sits in the signal; "Trim mix instead" inserts a single smoothed gain and is off by default.
@@ -28,7 +28,7 @@ Tier S, gate G0-G2 sketch. Oberli Audio effect, Bone theme, accent Peacock #039B
 
 ## 2. G1 design plan (five lines)
 
-1. **Window** 960 x 600 at 100 %, Bone, compact: Bone glares beside a dark DAW, so the analyser well stays the only large sunken area and nothing goes brighter than `surface-raised`.
+1. **Window** 960 x 600 at 100 %, Bone, compact: Bone glares beside a dark DAW, so the analyzer well stays the only large sunken area and nothing goes brighter than `surface-raised`.
 2. **Hero** is what the ear cannot judge: the seven band deltas and the match readout "Reference -1.4 dB". The Listen switch is big because the hand needs it, but it carries no information.
 3. **Accent** Peacock, only on what is active: the selected Listen segment, lit LEDs, the chosen section chip, the reference curve, the delta bars, the knob pointer and the readout's delta value (on Bone the readout is the charcoal bubble, so accent text is allowed there, 4.9:1 against #1C1B19).
 4. **Sections** from the parameter table's group order: References, Listen, Balance, Output. Output column last on the right with Trim at 64 px and the LUFS S meter; no Mix knob because this plugin has no wet path (one line to add to the brand sheet: utility plugins without a wet path omit Mix; the output column holds their output knob and meter).
@@ -52,7 +52,7 @@ Host order = this order; the core controls are the first five so Ableton Live 10
 | matchTarget | float | Match target | Listen | LUFS | -30 / -6 / -14 |
 | bypass | bool | Bypass | - | - | 0 / 1 / 0 |
 
-Not host parameters (editor and plugin state, saved in the project): reference file paths and their cached loudness, section markers per reference, blind tally, analyser settings (averaging, 1/3 or 1/6 octave), monitoring-level readout preference.
+Not host parameters (editor and plugin state, saved in the project): reference file paths and their cached loudness, section markers per reference, blind tally, analyzer settings (averaging, 1/3 or 1/6 octave), monitoring-level readout preference.
 
 `matchTarget` is only used when `trimMixInstead` is on: then both mix and reference are trimmed to the target so a -8 LUFS master and a -14 LUFS reference meet at a sane monitoring level. With it off, the reference is trimmed to the mix, which is what the Listen switch promises.
 
@@ -97,7 +97,7 @@ reference RAM ─ section loop / transport map ─ gain (match) ─ meter ─┘
 
 ### 4.5 Analysis (the Balance section)
 - Spectrum: 1/3 octave (switchable 1/6), 4096 FFT, Hann, averaged over the section loop (not a falling peak display), mix in ink, reference in accent, both drawn after the match gain so the curves are comparable.
-- Band deltas: seven bands with fixed edges (Sub < 60, Low 60-150, Lo-mid 150-400, Mid 400-1.5k, Hi-mid 1.5-4k, High 4-10k, Air > 10 k), each the mix's band energy minus the reference's in dB; bars from the centre line, number with sign above the label. These are the hero: a ±1 dB band reads as "fine", ±2.5 dB as "look here".
+- Band deltas: seven bands with fixed edges (Sub < 60, Low 60-150, Lo-mid 150-400, Mid 400-1.5k, Hi-mid 1.5-4k, High 4-10k, Air > 10 k), each the mix's band energy minus the reference's in dB; bars from the center line, number with sign above the label. These are the hero: a ±1 dB band reads as "fine", ±2.5 dB as "look here".
 - Width delta: side/mid energy ratio difference in percent, as a single line in the legend; per-band width is a Tier P addition if the first users ask.
 - Numbers table: LUFS I, LUFS S, LRA, TP (dBTP), PSR; mix row live, reference row from cache, delta row signed.
 - The display reads data from a lock-free FIFO; a 30 Hz timer, stopped when the transport stands still and the reference loop is off.
@@ -132,7 +132,7 @@ reference RAM ─ section loop / transport map ─ gain (match) ─ meter ─┘
 1. Null test on export in every state (4.6).
 2. Match accuracy: a reference that is the mix itself at -6 dB reads "Reference +6.0 dB" within 0.1 LU in Integrated and Short modes, 0.1 dB in True peak.
 3. Switch click test: a 1 kHz sine on both sides, 200 switches, no sample exceeds the sine's peak by more than 0.01 dB.
-4. CPU: editor open, analyser running, reference playing, under 3 % on an M1 at 48 kHz, 128 samples.
+4. CPU: editor open, analyzer running, reference playing, under 3 % on an M1 at 48 kHz, 128 samples.
 5. State recall: reopen a project, the slots, sections, match mode and the last listen state come back; the window scale is machine-local.
 6. Memory: 8 slots loaded, at most two decoded buffers resident.
 
