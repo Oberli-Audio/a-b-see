@@ -118,7 +118,14 @@ set(PRODUCT_SOURCES
     Source/PluginEditor.cpp
     Source/PluginEditor.h
     Source/Params.h
-    Source/State.h)
+    Source/State.h
+    Source/BlindRound.h
+    Source/Crossfade.h
+    Source/MatchEngine.h
+    Source/MixAnalysis.h
+    Source/ReferencePlayer.h
+    Source/ReferenceStore.h
+    Source/RenderSafety.h)
 
 target_sources(ABSee PRIVATE ${PRODUCT_SOURCES})
 target_include_directories(ABSee PRIVATE Source "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -186,15 +193,25 @@ endif()
 # ---------------------------------------------------------------------------
 juce_add_console_app(ABSeeHarness PRODUCT_NAME "ABSeeHarness")
 target_sources(ABSeeHarness PRIVATE tools/harness/Main.cpp)
-target_include_directories(ABSeeHarness PRIVATE Source "${CMAKE_CURRENT_BINARY_DIR}/generated"
-    "${CMAKE_CURRENT_BINARY_DIR}/ABSee_artefacts/JuceLibraryCode")
+target_include_directories(ABSeeHarness PRIVATE Source "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_compile_definitions(ABSeeHarness PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0
     JUCE_STRICT_REFCOUNTEDPOINTER=1 JUCE_STANDALONE_APPLICATION=1
-    PRODUCT_IS_INSTRUMENT=$<IF:$<BOOL:${PRODUCT_IS_SYNTH}>,1,0>)
+    PRODUCT_IS_INSTRUMENT=$<IF:$<BOOL:${PRODUCT_IS_SYNTH}>,1,0>
+    # The plugin sources use two of JUCE's plugin macros. In this JUCE they are compile
+    # definitions on the plugin target, not a generated JucePluginDefines.h as the template
+    # assumed, so a harness that compiles the sources itself has to carry them: taken from
+    # the ABSee target's own properties, so there is still one source for the name and the
+    # version. (The template's stale `ABSee_artefacts/JuceLibraryCode` include is gone; it
+    # never existed and the harness would not compile. Worth fixing in plugin-template.)
+    JucePlugin_Name="$<TARGET_PROPERTY:ABSee,JUCE_PLUGIN_NAME>"
+    JucePlugin_VersionString="${PRODUCT_VERSION}")
 # The harness compiles the plugin sources itself with its own copy of the modules (simple and
 # portable; Horizon Pad links the SharedCode library instead, which saves a compile).
 target_sources(ABSeeHarness PRIVATE ${PRODUCT_SOURCES})
+# The harness reads two properties of the ABSee target for the plugin macros above; the
+# dependency keeps the two in step and makes `--target ABSeeHarness` alone meaningful.
+add_dependencies(ABSeeHarness ABSee)
 target_link_libraries(ABSeeHarness PRIVATE
     juce::juce_audio_utils juce::juce_dsp juce::juce_audio_formats
     juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
@@ -250,9 +267,15 @@ if (Python3_FOUND)
                          --harness "$<TARGET_FILE:ABSeeHarness>" --kind ${PRODUCT_KIND}
                  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
         set_tests_properties(parameter_table PROPERTIES LABELS "fast;lint")
+        # Tier P, and the brief's categories, not the kit's instrument-flavoured default list.
+        # `parameters.csv` is deliberately not passed: that switches on the kit's own Init check,
+        # which compares a *choice* parameter's plain default with the harness's normalised echo
+        # and so fails for any choice default but index 0 (docs/status.md, Waiting for Björn).
+        # The same check, done right, is `test_init_preset_equals_the_table_defaults`.
         add_test(NAME preset_bank
                  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/dsp-kit/presetlint.py" bank
-                         "${CMAKE_CURRENT_SOURCE_DIR}/presets.csv" --tier S --track ${PRODUCT_KIND} --harness "$<TARGET_FILE:ABSeeHarness>"
+                         "${CMAKE_CURRENT_SOURCE_DIR}/presets.csv" --tier P --track ${PRODUCT_KIND}
+                         --categories Mastering,Mixing,Live --harness "$<TARGET_FILE:ABSeeHarness>"
                  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
         set_tests_properties(preset_bank PROPERTIES ENVIRONMENT "${HARNESS_ENV}" LABELS "fast;lint")
     else()

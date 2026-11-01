@@ -1,6 +1,6 @@
 id,version_added,type,kind,name,short,group,core,unit,min,max,default,centre,bipolar,choices,steps,format_kind,precision,parse_aliases,automatable,smoothing,smoothing_domain,control_rate,meaning,tooltip,notes
 listen,1,choice,plain,Listen,Listen,Listen,Y,,0,1,0,,N,Mix|Reference,2,choice,0,,Y,0,crossfade,event,,Switches between your mix and the reference at matched loudness,5 ms equal-power crossfade at the next block
-refSlot,1,int,plain,Reference,Ref,Listen,Y,,1,8,1,,N,,8,plain,0,,Y,0,crossfade,event,,Which of the loaded references plays,
+refSlot,1,choice,plain,Reference,Ref,Listen,Y,,0,7,0,,N,1|2|3|4|5|6|7|8,8,choice,0,,Y,0,crossfade,event,,Which of the loaded references plays,"a choice, not an int: JUCE's AudioParameterInt does not override isDiscrete(), so the VST3 wrapper reports stepCount 0 and Ableton would draw a continuous knob instead of eight slots (paramgen check, 2026-11-01)"
 matchMode,1,choice,plain,Match,Match,Listen,Y,,0,3,0,,N,Integrated|Short 3 s|True peak|Off,4,choice,0,,Y,0,crossfade,event,,How both sides reach the same loudness; Off keeps raw levels,
 blind,1,bool,plain,Blind,Blind,Listen,Y,,0,1,0,,N,,2,bool,0,off|on,Y,0,crossfade,event,,Hides which side is which and keeps a tally of your votes,Tally is editor state
 trim,1,float,plain,Trim,Trim,Output,Y,dB,-24,24,0,,Y,,0,db,1,,Y,20,db,block,quiet / unity / loud,Monitoring level for both sides; never touches a bounce,Forced to 0 dB when isNonRealtime()

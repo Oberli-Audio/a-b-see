@@ -1,7 +1,21 @@
 # Status - A B see 0.1.0 (2026-11-01)
-Tier P, track A (analysis; stages processing, output, analysis), at gate G1 closed, G2 open. Recipe D.8.1.
+Tier P, track A (analysis; stages processing, output, analysis), at G4 closed, G5 part-closed,
+G6 blocked on macOS. Recipe D.8.1.
 
 ## Waiting for Björn
+- 2026-11-01: **`presetlint.py` cannot check Init for this product.** The kit's `check_init`
+  compares a *choice* parameter's plain default with the harness's normalised echo, so it
+  fails for any choice default but index 0 - here `section` (default Loudest 10 s, index 5).
+  Fix belongs in bob-skills' `dsp-kit`, which this repo must not edit. Until then the ctest
+  `preset_bank` test runs without `parameters.csv` and the check is
+  `test_init_preset_equals_the_table_defaults` in the suite instead, which normalises both
+  sides the way the harness does.
+- 2026-11-01: **Two template bugs fixed here, worth fixing in `Oberli-Audio/plugin-template`**:
+  (1) the harness included `ABSee_artefacts/JuceLibraryCode` for a `JucePluginDefines.h` that
+  this JUCE no longer generates (the plugin macros are target compile definitions now), so it
+  did not compile at all; (2) the harness sized its work buffer to `--max-block` while
+  rendering blocks of `--block`, so the oversized-block test of its own scaffold wrote past
+  the end of the buffer (`malloc(): corrupted top size`).
 - 2026-11-01: **Shared `Source/oberli/` is not in the repo yet.** A B see needs `Loudness`
   (BS.1770-5 streaming meter: integrated, short-term 3 s, true peak 4x, per-rate K-weighting)
   and `References` (decode, resample on load, the shared `Oberli Audio/References/` cache,
@@ -38,9 +52,9 @@ Tier P, track A (analysis; stages processing, output, analysis), at gate G1 clos
 | G1 | closed 2026-11-01 | see Decisions (family, trade-off, three departures with their rejecting measurement) |
 | G2 | closed 2026-11-01 | `sound design/prototype/absee_proto.py` (numpy, track A: analysis prototypes are numpy, not Faust - F.15.1), one class per C++ module; `python3 "sound design/prototype/absee_proto.py" --demo` -> 4 renders, checked programmatically at G3, **not heard yet** |
 | G3 | prototype side closed 2026-11-01, plugin side open | `python3 "sound design/prototype/proto_measure.py" --all` -> 10/10 pass, numbers in the metric table below (JSON: `sound design/prototype/g3-prototype.json`) |
-| G4 | - | `cmake --build --preset release` |
-| G5 | - | plugin vs prototype residual; defining features by name |
-| G6 | - | `validate_plugin.py full`, `paramgen.py check --frozen`, `presetlint.py render --tier P`; hosts: Live 10.1 Rosetta -, Live Windows - |
+| G4 | closed 2026-11-01 | `cmake --preset release -G Ninja && cmake --build --preset release` -> clean, no warnings in `Source/**`; one module per prototype class, the two shared modules behind seams (`MixAnalysis.h`, `ReferenceStore.h`) |
+| G5 | part-closed 2026-11-01 | `test_plugin_matches_the_prototype` -> residual **-108.9 dBFS** after the switch has settled (threshold -90; the first 10 ms are the port's fade-in from Mix and are excluded, measured -32.7 dBFS there). Defining features by name: `test_render_is_always_the_wire` (bit-exact), `test_match_readout_says_what_it_did`. **Open:** the match against a real streaming meter, and feature 3 (band deltas) |
+| G6 | part-closed 2026-11-01, rest blocked | `ctest --preset all` -> **5/5 pass** (fast 47 s, render 65 s); `paramgen.py check --list-params --manual docs/parameters.md` -> OK, 11 parameters, round trip at 101 points; `presetlint.py bank --tier P --track effect` -> OK, 9 presets, matches the harness. **Blocked on macOS:** `validate_plugin.py full` (pluginval, Steinberg validator), the malloc trap / RTSan, `perf.py`, `paramgen.py check --frozen` (no release yet). Hosts: Live 10.1 Rosetta -, Live Windows - |
 | G7 | - | - |
 
 ## Metric table (G3, prototype; build Linux/x86_64, commit at the time of the run)
@@ -73,17 +87,16 @@ hysteresis band, not noise. Short 3 s has no hysteresis and reads 0.030 LU.
 
 ## Handoff
 Task: build A B see from G1 to a validated Tier P plugin, shared modules aside.
-Plan: 1. [x] G1 decisions 2. [x] G2 numpy prototype of the matching chain
-3. [x] G3 measure the prototype (10/10) 4. [ ] G4 port to C++ with the seams, harness hooks
-(next) 5. [ ] test suite (fast + render) 6. [ ] preset bank 7. [ ] G5 null test against the
-prototype 8. [ ] G6 what runs without macOS.
-Working tree: clean at the last commit. Build: red (the template skeleton still refers to
-`Params::outGain` and `Params::mix`, which `parameters.csv` does not have; the port at G4
-replaces it).
-Tests: not registered yet (numpy and scipy are installed in this session; CMake registers the
-suite only when it finds them, so re-configure after installing).
+Plan: 1. [x] G1 decisions 2. [x] G2 numpy prototype 3. [x] G3 measure the prototype (10/10)
+4. [x] G4 port to C++ with the seams and the harness hooks 5. [x] test suite (fast 16 tests
+/ 46 s, render 15 tests / 65 s) 6. [x] preset bank (9, lint green) 7. [x] G5 null against the
+prototype 8. [x] one committed golden 9. [ ] prove each presence test on a planted-defect
+build (D.3.8) (next) 10. [ ] README, CHANGELOG and notices for the friends (ship-bob)
+11. [ ] on Björn's Mac: validators, malloc trap, perf row, the two hosts.
+Working tree: clean at the last commit. Build: green (Linux/x86_64, GCC 13).
+Tests: 5/5 ctest targets pass; 31 tests in the suite, 1 skip is gone (the golden exists now).
 Open questions for the owner: the Waiting-for-Björn lines above.
-Next command: `cmake --preset release -G Ninja && cmake --build --preset release`
+Next command: `ctest --preset all`
 
 The prototype's renders are **not** committed: `.gitignore` keeps WAVs out of this repo
 (project policy, CLAUDE.md) and the renders are reproducible in one seeded command
@@ -147,6 +160,13 @@ measurement script and `g3-prototype.json`.
   `out` back to `in`; without a fade that step is a click on any material. The same 5 ms
   equal-power fade as the switch is used (one constant, one measurement), reading the buffer
   twice. Rejected by `proto_measure.py --case loop-seam` above -40 dB `max_click_db`.
+- 2026-11-01: **`refSlot` is a `choice` of eight, not an `int` 1-8** (the sketch's table said
+  int). `juce::AudioParameterInt` does not override `isDiscrete()`, and JUCE's VST3 wrapper
+  reports `stepCount = 0` for a parameter that is not discrete, so Ableton would have drawn
+  the reference slot as a continuous knob instead of eight positions. Found by
+  `paramgen.py check --list-params` ("refSlot: harness steps 0 != table 8"), which is exactly
+  what that check is for. The user sees the same thing ("1".."8"); the raw value is now the
+  0-based index, which the processor, the harness and the nine presets follow.
 - 2026-11-01: **Build fix:** `add_dependencies(ABSeeHarness ABSee)` in CMakeLists.txt. The
   harness includes `ABSee_artefacts/JuceLibraryCode` for `JucePluginDefines.h`, which juceaide
   only generates as part of the `ABSee` target; building the harness alone failed with

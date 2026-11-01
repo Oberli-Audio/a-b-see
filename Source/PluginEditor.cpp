@@ -5,11 +5,14 @@
 namespace
 {
 // Placeholder colours in the brand's two themes (plugin-ui-bob oberli-audio-brand.md); the
-// real tokens come with the LookAndFeel at G2.
+// real tokens come with the shared LookAndFeel (Source/oberli/), and the editor is rebuilt
+// from the brand sheet then. Accent: peacock #039BE5, the category accent for analysis and
+// monitoring (CLAUDE.md, decided 2026-11-01; it was jade in the Tier S sketch).
 struct Theme { juce::Colour bg, ink, accent; };
+constexpr juce::uint32 kAccentPeacock = 0xFF039BE5;
 constexpr bool kBone = std::string_view ("bone") == "bone";
-const Theme theme = kBone ? Theme { juce::Colour (0xFFF3EEE4), juce::Colour (0xFF1C1B19), juce::Colour (0xFF3FCF9E) }
-                          : Theme { juce::Colour (0xFF1C1B19), juce::Colour (0xFFF3EEE4), juce::Colour (0xFF3FCF9E) };
+const Theme theme = kBone ? Theme { juce::Colour (0xFFF3EEE4), juce::Colour (0xFF1C1B19), juce::Colour (kAccentPeacock) }
+                          : Theme { juce::Colour (0xFF1C1B19), juce::Colour (0xFFF3EEE4), juce::Colour (kAccentPeacock) };
 } // namespace
 
 ABSeeAudioProcessorEditor::ABSeeAudioProcessorEditor (ABSeeAudioProcessor& p)

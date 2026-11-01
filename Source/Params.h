@@ -27,8 +27,8 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     AudioProcessorValueTreeState::ParameterLayout layout;
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { listen, 1 }, "Listen", StringArray { "Mix", "Reference" }, 0,
         AudioParameterChoiceAttributes()));
-    layout.add (std::make_unique<AudioParameterInt> (ParameterID { refSlot, 1 }, "Reference", 1, 8, 1,
-        AudioParameterIntAttributes()));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { refSlot, 1 }, "Reference", StringArray { "1", "2", "3", "4", "5", "6", "7", "8" }, 0,
+        AudioParameterChoiceAttributes()));
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { matchMode, 1 }, "Match", StringArray { "Integrated", "Short 3 s", "True peak", "Off" }, 0,
         AudioParameterChoiceAttributes()));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { blind, 1 }, "Blind", false,
@@ -77,7 +77,7 @@ inline constexpr Smoothing smoothing[] = {
 struct Help { const char* id; const char* tooltip; const char* meaning; };
 inline constexpr Help help[] = {
     { listen, "Switches between your mix and the reference at matched loudness. Options Mix, Reference; default Mix.", "" },
-    { refSlot, "Which of the loaded references plays. Range 1 to 8, default 1.", "" },
+    { refSlot, "Which of the loaded references plays. Options 1, 2, 3, 4, 5, 6, 7, 8; default 1.", "" },
     { matchMode, "How both sides reach the same loudness; Off keeps raw levels. Options Integrated, Short 3 s, True peak, Off; default Integrated.", "" },
     { blind, "Hides which side is which and keeps a tally of your votes. Default Off.", "" },
     { trim, "Monitoring level for both sides; never touches a bounce. Range -24.0 dB to +24.0 dB, default 0.0 dB.", "quiet / unity / loud" },

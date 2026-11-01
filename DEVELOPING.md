@@ -40,6 +40,27 @@ The harness implements `scripts/dsp-kit/harness-contract.md` (v3). Presets come 
 (`FACTORY_PRESETS` overrides the folder, `PRESETS_CSV` the list). Product-specific flags and
 metrics are the two hooks at the end of `tools/harness/Main.cpp`.
 
+### A B see's own flags
+
+Each one stands in for a shared module that has not landed yet (`docs/status.md`, Waiting for
+Björn) and makes the call the real module will make, so the tests written against them keep
+passing when `Source/oberli/` arrives. `--help` lists them all; the ones used most:
+
+```bash
+$H --reference=ref.wav --param=listen=1 --param=matchMode=0 --mix-meter=prepass   # a matched A/B
+$H --reference=ref.wav --param=listen=1 --nonrealtime                              # must be the wire
+$H --reference=ticks.wav --param=followTransport=1 --transport=120                 # the transport map
+$H --reference=ref.wav --marks=1,1,2.0,3.5 --param=section=0.2                     # section 1 of slot 1
+$H --reference=ref.wav --align=1,0.0,0.5 --transport=120                           # "Align here"
+$H --mix-reading=-14.0,-13.5,-1.2                                                  # inject LUFS-I, LUFS-S, dBTP
+```
+
+`--reference` refuses a file whose rate differs from `--sample-rate`: `oberli::References`
+resamples on load and the harness does not, and the player reads the buffer with an integer
+step so `processBlock` never resamples. The `product` object of the JSON carries the match
+readout, the reference's state (residency, playhead, section bounds) and whether render safety
+forced the wire; the defining-feature tests assert on it.
+
 ## Tests
 
 ```bash
@@ -47,7 +68,8 @@ ctest --preset fast                       # every build: contract, rate x block 
 ctest --preset all                        # plus goldens and the lints
 HARNESS=$H python3 tools/tests/test_plugin.py --label fast   # the same suite by hand
 python3 tools/tests/check_table.py --harness $H --kind effect   # parameters.csv vs the plugin and the manual
-python3 scripts/dsp-kit/presetlint.py bank presets.csv --tier P --harness $H
+python3 scripts/dsp-kit/presetlint.py bank presets.csv --tier P --track effect --categories Mastering,Mixing,Live --harness $H
+python3 "sound design/prototype/proto_measure.py" --all   # the prototype's own metric table (G3)
 python3 scripts/dsp-kit/presetlint.py render presets.csv --tier P --harness $H --md docs/presets.md
 python3 scripts/dsp-kit/perf.py run --harness $H --arch x86_64   # the CPU row of the release gate
 ```

@@ -434,11 +434,16 @@ class State:
             setattr(self, k, v)
 
 
-def render_chain(mix, fs, reference, analysis, state, block=512, switch_at=None, transport_bpm=None):
+def render_chain(mix, fs, reference, analysis, state, block=512, switch_at=None, transport_bpm=None,
+                 mix_reading=None):
     """The prototype of `processBlock`, block by block.
 
     switch_at: list of (seconds, listen) switches applied at the next block boundary.
     transport_bpm: a playing host clock; None means no playhead at all.
+    mix_reading: a fixed `MixReading` instead of the offline meter. The plugin's harness
+        injects a constant reading the same way (`--mix-reading`) while the shared meter is
+        missing, so with the same constant on both sides the G5 null test compares the match
+        *policy* and nothing else.
     Returns (output, info) with info carrying the readout and the gains, the way the
     harness's `product` object will.
     """
@@ -479,7 +484,7 @@ def render_chain(mix, fs, reference, analysis, state, block=512, switch_at=None,
             next_switch += 1
         blk = mix[pos:pos + n]
         meter.push(blk)
-        reading = meter.read()
+        reading = mix_reading if mix_reading is not None else meter.read()
         transport = (True, now) if transport_bpm else None
         ref_blk = player.render(n, (section["in_s"], section["out_s"]),
                                 state.follow_transport, transport)
