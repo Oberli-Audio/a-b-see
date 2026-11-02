@@ -88,6 +88,7 @@ void ABSeeAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     trimSmoothed.prepare (sampleRate, (double) tauMsFor (Params::trim) / 1000.0);
     trimSmoothed.reset (trimParam->load());
     mixAnalyser->prepare (sampleRate, preparedBlockSize);
+    loader.setSessionRate (sampleRate);   // a new rate reloads the references at it
 
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) preparedBlockSize, 1 };
     for (auto* f : { &rmsFilterL, &rmsFilterR })

@@ -57,8 +57,8 @@ Tier P, track A (analysis; stages processing, output, analysis), at G4 closed, G
 | G2 | closed 2026-11-01 | `sound design/prototype/absee_proto.py` (numpy, track A: analysis prototypes are numpy, not Faust - F.15.1), one class per C++ module; `python3 "sound design/prototype/absee_proto.py" --demo` -> 4 renders, checked programmatically at G3, **not heard yet** |
 | G3 | prototype side closed 2026-11-01, plugin side open | `python3 "sound design/prototype/proto_measure.py" --all` -> 10/10 pass, numbers in the metric table below (JSON: `sound design/prototype/g3-prototype.json`) |
 | G4 | closed 2026-11-01 | `cmake --preset release -G Ninja && cmake --build --preset release` -> clean, no warnings in `Source/**`; one module per prototype class, the two shared modules behind seams (`MixAnalysis.h`, `ReferenceStore.h`) |
-| G5 | part-closed 2026-11-02 | `test_plugin_matches_the_prototype` -> residual **-108.9 dBFS** after the switch has settled (threshold -90; the first 10 ms are the port's fade-in from Mix and are excluded, measured -32.7 dBFS there; Linux run, passes on macOS arm64). Defining features by name: `test_render_is_always_the_wire` (bit-exact), `test_match_readout_says_what_it_did`, and since 2026-11-02 `test_live_match_lands_within_the_brief` (the shared meter live, numbers in the live-match table below). **Open:** feature 3 (band deltas, `Analysis` has landed) and the plugin's own reference loader (the harness loads through `oberli::references::load`, the plugin has no caller yet) |
-| G6 | part-closed 2026-11-02, rest next | `ctest --preset all` -> **10/10 pass** on macOS arm64 (suite fast 12 s, render 18 s, `bounce_null`, the three shared-code tests, three lints); `paramgen.py check --list-params --manual docs/parameters.md` -> OK, 11 parameters, round trip at 101 points; `presetlint.py bank --tier P --track effect` -> OK, 9 presets, matches the harness. **Next on this Mac:** `validate_plugin.py full` (pluginval, Steinberg validator), the malloc trap / RTSan, `perf.py`, the golden re-render; `paramgen.py check --frozen` (no release yet). Hosts: Live 10.1 Rosetta -, Live Windows - |
+| G5 | part-closed 2026-11-02 | `test_plugin_matches_the_prototype` -> residual **-108.9 dBFS** after the switch has settled (threshold -90; the first 10 ms are the port's fade-in from Mix and are excluded, measured -32.7 dBFS there; Linux run, passes on macOS arm64). Defining features by name: `test_render_is_always_the_wire` (bit-exact), `test_match_readout_says_what_it_did`, and since 2026-11-02 `test_live_match_lands_within_the_brief` (the shared meter live, numbers in the live-match table below); the plugin's own reference loader: `test_plugin_loader_plays_what_the_harness_loader_plays` (bit-identical), `test_restored_project_plays_its_reference`, `test_missing_reference_says_so_and_keeps_the_mix`. **Open:** feature 3 (band deltas, `Analysis` has landed) |
+| G6 | part-closed 2026-11-02 | `ctest --preset all` -> **10/10 pass** on macOS arm64 (suite fast 12 s, render 20 s, `bounce_null`, the three shared-code tests, three lints), every render under the malloc trap; `PRODUCT_MALLOC_TRAP_SELFTEST=1 ABSeeHarness --signal=impulse` -> aborts, exit 134 ("malloc inside processBlock"); RTSan (`eval "$(python3 scripts/dsp-kit/toolchain.py env)" && cmake --preset rtsan && cmake --build --preset rtsan`, Homebrew LLVM 23.1.4): `PRODUCT_RTSAN_SELFTEST=1` -> aborts, exit 134 ("RealtimeSanitizer: unsafe-library-call"), `ctest --test-dir build-rtsan -R 'suite_|bounce_null|harness_contract'` -> **4/4 clean**; `perf.py run --presets all --config 48000/64 --runs 3` -> **OK on both slices**, worst p99.9 **2.1 %** (x86_64 under Rosetta, `blind-session`), arm64 1.7 %, every max a scheduling reading (`docs/perf.md`, baseline `docs/perf.json`); `paramgen.py check --list-params --manual docs/parameters.md` -> OK, 11 parameters; `presetlint.py bank --tier P --track effect` -> OK, 9 presets. **Open:** `validate_plugin.py full` (pluginval, Steinberg validator), the golden re-rendered on arm64; `paramgen.py check --frozen` (no release yet). Hosts: Live 10.1 Rosetta -, Live Windows - |
 | G7 | - | - |
 
 ## Metric table (G3, prototype; build Linux/x86_64, commit at the time of the run)
@@ -117,6 +117,12 @@ a build can explain another's failure.
 | B | the blind draw constant | `test_blind_assignment_is_seeded` | "Items in the second set but not the first: True" |
 | C (2026-11-02) | the processor built with `NoMixAnalyser` | `test_live_match_lands_within_the_brief` | "integrated match off by -6.015 (gain 0.00 dB, readout 'Reference +0.0 dB')" |
 | C (2026-11-02) | `buildReferenceBuffer` labels the buffer with the file's rate | `test_reference_at_another_rate_is_resampled_on_load` | "False is not true" (the player saw a rate mismatch and stayed silent) |
+| D (2026-11-02) | `ReferenceLoader` never publishes (both publish points) | `test_plugin_loader_plays_what_the_harness_loader_plays`, `test_restored_project_plays_its_reference` | "the plugin's loader published nothing", "the restored reference does not play" |
+| D (2026-11-02) | `ReferenceLoader::accept` drops the load error | `test_missing_reference_says_so_and_keeps_the_mix` | "0 != 1" (no error for the slot) |
+
+A first build D blocked only the inline publish: the next tick's retry published one block late,
+`test_restored_project_plays_its_reference` rightly still passed and the bit-identity test
+caught the late block (-19.3 dBFS). The table's build D blocks both publish points.
 
 `test_plugin_matches_the_prototype` also failed in build B, as it must: the trim offset is a
 real difference from the prototype. The remaining tests are contract and health checks, which
@@ -136,11 +142,11 @@ Plan: 1. [x] G1 decisions 2. [x] G2 numpy prototype 3. [x] G3 measure the protot
 bank (9, lint green) 7. [x] G5 null against the prototype 8. [x] one committed golden 9. [x]
 every presence test proven on a planted-defect build 10. [x] on the Mac: `Source/oberli/`
 refreshed, release build and `ctest --preset all` green 11. [x] the live meter and the shared
-reference loader wired, proven (builds C) 12. [ ] G6 on the Mac: malloc trap self-test, RTSan
-build, `perf.py`, `validate_plugin.py full`, golden re-rendered on arm64 13. [ ] the plugin's
-reference loader (worker thread: `oberli::references::load` + `buildReferenceBuffer` ->
-`ReferenceStore::publish`, slot switch -> `setActive`), so a restored project plays its
-references 14. [ ] feature 3, band deltas, on `oberli::Analysis` 15. [ ] the editor
+reference loader wired, proven (builds C) 12. [x] G6 on the Mac: malloc trap self-test, RTSan
+build and suite, `perf.py` on both slices 12b. [ ] `validate_plugin.py full`, golden
+re-rendered on arm64 13. [x] the plugin's reference loader (`Source/ReferenceLoader.*`: worker
+decode, message-thread publish, follows the slot, reloads on a new rate or new marks), proven
+(build D) 14. [ ] feature 3, band deltas, on `oberli::Analysis` 15. [ ] the editor
 (plugin-ui-bob) 16. [ ] README, CHANGELOG (ship-bob) 17. [ ] the two Ableton host checks and
 the listening checkpoint (Björn).
 Working tree: clean after the checkpoint commit. Build: green on macOS (universal, LTO), no
@@ -150,7 +156,7 @@ Python: CMake must find a python3 with numpy and scipy, or the suite is silently
 registered. On this Mac it found Homebrew's 3.12 (no numpy) first; configured with
 `-DPython3_EXECUTABLE=/usr/bin/python3` (cached in `build/`).
 Open questions for the owner: the Waiting-for-Björn lines above.
-Next command: `PRODUCT_MALLOC_TRAP_SELFTEST=1 ./build/ABSeeHarness_artefacts/Release/ABSeeHarness --signal=impulse`
+Next command: `python3 scripts/dsp-kit/validate_plugin.py --profile full --no-build --plugin "build/ABSee_artefacts/Release/VST3/A B see.vst3"`
 
 The prototype's renders are **not** committed: `.gitignore` keeps WAVs out of this repo
 (project policy, CLAUDE.md) and the renders are reproducible in one seeded command
@@ -158,6 +164,16 @@ The prototype's renders are **not** committed: `.gitignore` keeps WAVs out of th
 measurement script and `g3-prototype.json`.
 
 ## Decisions
+- 2026-11-02: **The plugin decodes its own references, one writer to the store.**
+  `absee::ReferenceLoader` (a 10 Hz message-thread timer and one low-priority worker thread)
+  is the only code that writes `ReferenceStore`: the worker decodes and measures, the timer
+  publishes, follows the Reference parameter (`setActive`, the two-resident rule) and reloads a
+  slot whose key (path, marks, session rate) no longer matches its buffer, which covers a
+  restored project, a rate change and a marker change with one rule. A file that cannot be
+  read is reported per slot in plain words (`errorFor`) and not retried every tick. Known
+  limit, recorded for the editor: `extra.slots` is read on the message thread while a host may
+  call `setStateInformation` from another thread; the editor work decides whether the slot
+  state needs a lock.
 - 2026-11-02: **One meter, one reference path, in the plugin and in the harness.** The
   harness's own BS.1770 copy no longer analyses references or the `prepass` mix reading: both
   go through `oberli::Loudness`, and references through `oberli::references::load` (resampled

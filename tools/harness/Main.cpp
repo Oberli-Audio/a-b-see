@@ -171,6 +171,9 @@ const char* const kUsage =
     "  --reference=<file>           fill the next reference slot, 1 to 8, in order: decoded and\n"
     "                               resampled to --sample-rate by oberli::references::load, each\n"
     "                               section measured by oberli::Loudness (ReferenceSections.h)\n"
+    "  --loader=harness|plugin      who publishes the references: the harness (default: decoded once,\n"
+    "                               republished between blocks) or the plugin's own ReferenceLoader,\n"
+    "                               run inline between blocks (also loads the paths a --state-in brings)\n"
     "  --marks=<slot>,<n>,<in>,<out>   section n (1-4) of slot (1-8), in seconds; repeatable\n"
     "  --align=<slot>,<daw>,<ref>   the \"Align here\" pair of a slot, in seconds\n"
     "  --transport=<bpm>[,<start>]  a playing host clock from <start> seconds; --transport=stopped\n"
@@ -205,7 +208,7 @@ Args parseArgs (int argc, char* argv[])
         "automate", "bend", "mod", "notes", "midi", "gate", "reprepare-at", "in", "signal", "out", "state-in", "state-out",
         "profile", "preset-at", "warmup", "solo", "list-params", "list-presets",
         // A B see's own flags (--help says what each one does)
-        "non-realtime", "reference", "marks", "align", "transport", "mix-reading", "mix-meter", "safe-on-render" };
+        "non-realtime", "loader", "reference", "marks", "align", "transport", "mix-reading", "mix-meter", "safe-on-render" };
     Args a;
     for (int i = 1; i < argc; ++i)
     {
@@ -716,19 +719,29 @@ static int run (int argc, char* argv[])
     // The decoded buffers the harness keeps as `oberli::References` would: the store holds at
     // most two (the brief's residency rule), so the active slot is (re)published on demand
     // between blocks, which is exactly what References does when the user switches slots.
+    const auto loaderKind = args.get ("loader", "harness");
+    if (loaderKind != "harness" && loaderKind != "plugin") refuse ("--loader is harness or plugin: " + loaderKind);
+    const bool pluginLoader = loaderKind == "plugin";
     std::array<std::unique_ptr<absee::ReferenceBuffer>, absee::kNumSlots> decoded;
     int referencesLoaded = 0;
     for (auto spec : args.all ("reference"))
     {
         if (referencesLoaded >= absee::kNumSlots) refuse ("--reference: there are 8 slots");
         auto file = juce::File::getCurrentWorkingDirectory().getChildFile (spec);
-        juce::String error;
-        auto buffer = buildReference (file, rate, product->slotState (referencesLoaded), error);
-        if (buffer == nullptr) refuse ("--reference " + error);
+        if (! pluginLoader)
+        {
+            juce::String error;
+            auto buffer = buildReference (file, rate, product->slotState (referencesLoaded), error);
+            if (buffer == nullptr) refuse ("--reference " + error);
+            decoded[(size_t) referencesLoaded] = std::move (buffer);
+        }
         product->slotState (referencesLoaded).path = file.getFullPathName();
-        decoded[(size_t) referencesLoaded] = std::move (buffer);
         ++referencesLoaded;
     }
+    if (pluginLoader)   // the paths a --state-in brought count too: the loader finds them there
+        for (int i = 0; i < absee::kNumSlots; ++i)
+            if (! product->slotState (i).isEmpty())
+                referencesLoaded = juce::jmax (referencesLoaded, i + 1);
     int maxResident = 0, maxRetired = 0;
     const auto republishActiveSlot = [&] ()
     {
@@ -903,7 +916,10 @@ static int run (int argc, char* argv[])
         // (oberli::References decoding and publishing, D.1.4 pattern B).
         if (referencesLoaded > 0)
         {
-            republishActiveSlot();
+            if (pluginLoader)
+                product->referenceLoader().update (true);
+            else
+                republishActiveSlot();
             // The residency rule is about what is resident *while playing*; by the time the
             // JSON is written `releaseResources` has freed everything, so it is sampled here.
             maxResident = juce::jmax (maxResident, product->referenceStore().residentCount());
@@ -1044,6 +1060,15 @@ static int run (int argc, char* argv[])
         // rule 13, A B see's own state: a dropped or misspelled flag shows up here
         set (applied, "non_realtime", nonRealtime);
         set (applied, "references", referencesLoaded);
+        set (applied, "loader", loaderKind);
+        if (pluginLoader)
+        {
+            juce::var loadErrors;
+            for (int i = 0; i < absee::kNumSlots; ++i)
+                if (product->referenceLoader().errorFor (i).isNotEmpty())
+                    loadErrors.append (juce::String (i + 1) + ": " + product->referenceLoader().errorFor (i));
+            set (applied, "load_errors", loadErrors);
+        }
         set (applied, "transport", args.has ("transport") ? juce::var (args.get ("transport")) : juce::var());
         set (applied, "mix_reading", args.has ("mix-reading") ? juce::var (args.get ("mix-reading"))
                                    : (args.has ("mix-meter") ? juce::var (args.get ("mix-meter")) : juce::var ("live")));

@@ -1,0 +1,189 @@
+{
+ "machine": "Bjorns-MBP.home",
+ "seconds": 60.0,
+ "runs": 3,
+ "warmup": 200,
+ "budget": {
+  "p999_pct": 25.0,
+  "max_pct": 50.0
+ },
+ "cells": {
+  "arm64|init|48000/64": {
+   "arch": "arm64",
+   "runs": 3,
+   "p50_pct": 0.196875,
+   "p99_pct": 1.412475,
+   "p999_pct": 1.48125,
+   "over_deadline": 0,
+   "first_block_pct": 0.518775,
+   "max": {
+    "max_pct": 1.95315,
+    "at_s": 52.59866666666667,
+    "reading": "scheduling",
+    "positions_s": [
+     35.998666666666665,
+     40.398666666666664,
+     52.59866666666667
+    ]
+   }
+  },
+  "arm64|master-vs-reference|48000/64": {
+   "arch": "arm64",
+   "runs": 3,
+   "p50_pct": 0.196875,
+   "p99_pct": 1.412475,
+   "p999_pct": 1.48125,
+   "over_deadline": 0,
+   "first_block_pct": 0.4281,
+   "max": {
+    "max_pct": 68.075025,
+    "at_s": 57.87466666666667,
+    "reading": "scheduling",
+    "positions_s": [
+     3.198666666666667,
+     57.87466666666667,
+     50.077333333333335
+    ]
+   }
+  },
+  "arm64|true-peak-compare|48000/64": {
+   "arch": "arm64",
+   "runs": 3,
+   "p50_pct": 0.19995,
+   "p99_pct": 1.42185,
+   "p999_pct": 1.541226449999992,
+   "over_deadline": 0,
+   "first_block_pct": 0.44685,
+   "max": {
+    "max_pct": 4.55625,
+    "at_s": 27.67866666666667,
+    "reading": "scheduling",
+    "positions_s": [
+     27.67866666666667,
+     49.09866666666667,
+     48.992
+    ]
+   }
+  },
+  "arm64|loud-master-meet|48000/64": {
+   "arch": "arm64",
+   "runs": 3,
+   "p50_pct": 0.196875,
+   "p99_pct": 1.4187015,
+   "p999_pct": 1.5156,
+   "over_deadline": 0,
+   "first_block_pct": 0.42495,
+   "max": {
+    "max_pct": 5.496825,
+    "at_s": 21.328,
+    "reading": "scheduling",
+    "positions_s": [
+     57.344,
+     34.498666666666665,
+     21.328
+    ]
+   }
+  },
+  "arm64|raw-levels|48000/64": {
+   "arch": "arm64",
+   "runs": 3,
+   "p50_pct": 0.200025,
+   "p99_pct": 1.434375,
+   "p999_pct": 1.7094,
+   "over_deadline": 0,
+   "first_block_pct": 0.56565,
+   "max": {
+    "max_pct": 32.731275,
+    "at_s": 44.86666666666667,
+    "reading": "scheduling",
+    "positions_s": [
+     44.86666666666667,
+     58.752,
+     54.872
+    ]
+   }
+  },
+  "arm64|verse-check-short|48000/64": {
+   "arch": "arm64",
+   "runs": 3,
+   "p50_pct": 0.203175,
+   "p99_pct": 1.4625,
+   "p999_pct": 1.594386299999992,
+   "over_deadline": 0,
+   "first_block_pct": 0.46875,
+   "max": {
+    "max_pct": 2.168775,
+    "at_s": 31.448,
+    "reading": "scheduling",
+    "positions_s": [
+     51.398666666666664,
+     33.998666666666665,
+     31.448
+    ]
+   }
+  },
+  "arm64|blind-session|48000/64": {
+   "arch": "arm64",
+   "runs": 3,
+   "p50_pct": 0.2031,
+   "p99_pct": 1.453125,
+   "p999_pct": 1.588146149999992,
+   "over_deadline": 0,
+   "first_block_pct": 0.5187,
+   "max": {
+    "max_pct": 2.0844,
+    "at_s": 4.398666666666666,
+    "reading": "scheduling",
+    "positions_s": [
+     4.998666666666667,
+     4.398666666666666,
+     51.79866666666667
+    ]
+   }
+  },
+  "arm64|chorus-vs-chorus|48000/64": {
+   "arch": "arm64",
+   "runs": 3,
+   "p50_pct": 0.203175,
+   "p99_pct": 1.4593515,
+   "p999_pct": 1.588146149999992,
+   "over_deadline": 0,
+   "first_block_pct": 0.54375,
+   "max": {
+    "max_pct": 2.334375,
+    "at_s": 19.798666666666666,
+    "reading": "scheduling",
+    "positions_s": [
+     19.798666666666666,
+     24.224,
+     48.19866666666667
+    ]
+   }
+  },
+  "arm64|live-room-check|48000/64": {
+   "arch": "arm64",
+   "runs": 3,
+   "p50_pct": 0.203175,
+   "p99_pct": 1.459425,
+   "p999_pct": 1.606911299999992,
+   "over_deadline": 0,
+   "first_block_pct": 0.4875,
+   "max": {
+    "max_pct": 14.565675000000002,
+    "at_s": 40.7,
+    "reading": "scheduling",
+    "positions_s": [
+     12.798666666666668,
+     40.7,
+     8.698666666666666
+    ]
+   }
+  },
+  "arm64|idle|48000/64": {
+   "p50_pct": 0.20625,
+   "p99_pct": 1.46565
+  }
+ },
+ "errors": [],
+ "reason": "first baseline, macOS arm64 native, 2026-11-02"
+}

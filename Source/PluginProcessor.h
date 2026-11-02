@@ -14,6 +14,7 @@
 #include "MatchEngine.h"
 #include "MixAnalysis.h"
 #include "Params.h"
+#include "ReferenceLoader.h"
 #include "ReferencePlayer.h"
 #include "ReferenceStore.h"
 #include "RenderSafety.h"
@@ -77,6 +78,9 @@ public:
     //================================================================ the seams
     /** The slots as the audio thread sees them. `oberli::References` publishes into this. */
     absee::ReferenceStore& referenceStore() noexcept { return store; }
+
+    /** Decodes and publishes the slots' references (message thread, a 10 Hz timer). */
+    absee::ReferenceLoader& referenceLoader() noexcept { return loader; }
 
     /** The project's half of a reference (path, marks, align pair). Message thread. */
     absee::SlotState& slotState (int index) noexcept
@@ -167,6 +171,11 @@ private:
     absee::BlindRound blind;
     std::unique_ptr<absee::MixAnalyser> mixAnalyser;
     absee::State::Extra extra;
+    // after the store and the slots it reads: destroyed first, its thread stopped before they go
+    absee::ReferenceLoader loader {
+        store,
+        [this] { return refSlotParam != nullptr ? (int) std::lround (refSlotParam->load()) : 0; },
+        [this] (int i) -> const absee::SlotState& { return extra.slots[(size_t) juce::jlimit (0, absee::kNumSlots - 1, i)]; } };
     OnePoleDb trimSmoothed;
 
     double currentSampleRate = 48000.0;

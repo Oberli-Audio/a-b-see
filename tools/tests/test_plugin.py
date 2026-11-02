@@ -538,6 +538,54 @@ class Blind(Timed):
             self.assertTrue((x == w).all(), "with no reference loaded the output is not the mix")
 
 
+
+class ReferenceLoading(Timed):
+    """The plugin's own ReferenceLoader (worker decode, message-thread publish), run inline by
+    the harness's --loader=plugin."""
+
+    def test_plugin_loader_plays_what_the_harness_loader_plays(self):         # ReferenceLoader.h
+        """The plugin's own loader (worker decode + message-thread publish, here run inline)
+        publishes the same buffer as the harness: the two renders are bit-identical."""
+        params = {"listen": LISTEN["reference"], "matchMode": MATCH["short"], "section": SECTION["loudest"],
+                  "followTransport": 0.0}
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            run(params, reference=str(Material.quiet), seconds=2.0, out=d / "harness.wav")
+            res = run(params, reference=str(Material.quiet), loader="plugin", seconds=2.0, out=d / "plugin.wav")
+            self.assertEqual(res["applied"]["loader"], "plugin")
+            self.assertTrue(res["product"]["reference"]["playing"], "the plugin's loader published nothing")
+            a, _ = K.read_wav(d / "harness.wav")
+            b, _ = K.read_wav(d / "plugin.wav")
+            self.assertTrue((a == b).all(), "the plugin's loader built another buffer: residual %.1f dBFS"
+                            % K.null_residual(a, b, align=False)["peak_dbfs"])
+
+    def test_restored_project_plays_its_reference(self):                    # sketch 3: reopening a set
+        """A saved project carries the path; reopened, the plugin decodes it again itself."""
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            run(state_out=d / "s.state", seconds=0.25, reference=str(Material.quiet))
+            res = run({"listen": LISTEN["reference"], "matchMode": MATCH["off"], "followTransport": 0.0},
+                      state_in=d / "s.state", loader="plugin", seconds=1.0)
+            self.assertEqual(res["applied"]["load_errors"], None)
+            self.assertTrue(res["product"]["reference"]["playing"], "the restored reference does not play")
+            self.assertEqual(res["product"]["listen"]["side"], "reference")
+
+    def test_missing_reference_says_so_and_keeps_the_mix(self):             # sketch 2.5, state
+        """A project whose reference file has gone: a plain-words error for the slot, no crash,
+        and the switch stays on the mix."""
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            gone = d / "gone.wav"
+            K.write_wav(gone, np.zeros((4800, 2), dtype=np.float32), 48000)
+            run(state_out=d / "s.state", seconds=0.25, reference=str(gone))
+            gone.unlink()
+            res = run({"listen": LISTEN["reference"], "matchMode": MATCH["off"]},
+                      state_in=d / "s.state", loader="plugin", seconds=0.5)
+            self.assertEqual(len(res["applied"]["load_errors"] or []), 1, res["applied"].get("load_errors"))
+            self.assertFalse(res["product"]["reference"]["playing"])
+            self.assertEqual(res["product"]["listen"]["side"], "mix")
+
+
 class Performance(Timed):
     """rule 20. The figure that counts is `perf.py`'s on Björn's Mac at 48 k/64 on the slice
     the host runs; this is the guard that keeps the number from drifting between releases,

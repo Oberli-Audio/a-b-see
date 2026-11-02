@@ -124,6 +124,8 @@ set(PRODUCT_SOURCES
     Source/MatchEngine.h
     Source/MixAnalysis.h
     Source/LoudnessMixAnalyser.h
+    Source/ReferenceLoader.cpp
+    Source/ReferenceLoader.h
     Source/ReferencePlayer.h
     Source/ReferenceSections.cpp
     Source/ReferenceSections.h
