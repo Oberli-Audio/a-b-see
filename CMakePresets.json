@@ -53,7 +53,7 @@
     }
   ],
   "buildPresets": [
-    { "name": "release", "configurePreset": "release", "configuration": "Release", "targets": [ "ABSee_VST3", "ABSee_Standalone", "ABSeeHarness" ] },
+    { "name": "release", "configurePreset": "release", "configuration": "Release", "targets": [ "ABSee_VST3", "ABSee_Standalone", "ABSee_SignStandalone", "ABSeeHarness" ] },
     { "name": "debug", "configurePreset": "debug", "targets": [ "ABSee_VST3", "ABSeeHarness" ] },
     { "name": "asan", "configurePreset": "asan", "targets": [ "ABSee_VST3", "ABSeeHarness" ] },
     { "name": "tsan", "configurePreset": "tsan", "targets": [ "ABSee_VST3", "ABSeeHarness" ] },

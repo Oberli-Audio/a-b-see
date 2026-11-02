@@ -1,4 +1,5 @@
 #include "ReferenceSections.h"
+#include "BandDeltas.h"
 
 namespace absee
 {
@@ -42,6 +43,7 @@ SectionAnalysis analyseWith (oberli::Loudness& meter, const juce::AudioBuffer<fl
     const auto m = measure (meter, audio, from, n);
     s.integratedLufs = m.integratedLufs;
     s.truePeakDb = m.truePeakDb;
+    s.bands = measureBands (audio, rate, s.inSeconds, s.outSeconds);
     return s;
 }
 } // namespace

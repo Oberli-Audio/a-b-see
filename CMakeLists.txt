@@ -113,6 +113,9 @@ juce_add_plugin(ABSee
     VST3_AUTO_MANIFEST          TRUE)
 
 set(PRODUCT_SOURCES
+    Source/BandDeltas.cpp
+    Source/BandDeltas.h
+    Source/Bands.h
     Source/PluginProcessor.cpp
     Source/PluginProcessor.h
     Source/PluginEditor.cpp
@@ -195,6 +198,20 @@ if (PRODUCT_RELEASE_SYMBOLS)
                     VERBATIM)
             endif()
         endforeach()
+        # strip rewrites the binary after JUCE's ad-hoc signature, and macOS kills the process
+        # that loads a bundle whose signature no longer matches (docs/failures.md, ctest
+        # bundle_signature_*): sign again, ad hoc. The VST3 right after its strip, so a VST3-only
+        # build is loadable; the Standalone in its own target, because JUCE's menu nib reaches
+        # the app after the POST_BUILD step.
+        add_custom_command(TARGET ABSee_VST3 POST_BUILD
+            COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:ABSee_VST3>"
+            COMMENT "ad-hoc sign: VST3" VERBATIM)
+        if (TARGET ABSee_Standalone)
+            add_custom_target(ABSee_SignStandalone ALL
+                COMMAND codesign --force --sign - "$<TARGET_BUNDLE_DIR:ABSee_Standalone>"
+                COMMENT "ad-hoc sign: Standalone" VERBATIM)
+            add_dependencies(ABSee_SignStandalone ABSee_Standalone)
+        endif()
     endif()
 endif()
 
@@ -324,6 +341,14 @@ if (Python3_FOUND)
                          --harness "$<TARGET_FILE:ABSeeHarness>" --kind ${PRODUCT_KIND}
                  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
         set_tests_properties(bounce_null PROPERTIES ENVIRONMENT "${HARNESS_ENV}" LABELS fast)
+        if (APPLE)
+            # a bundle macOS refuses to load is the first thing a host or a validator meets
+            foreach(format VST3 Standalone)
+                add_test(NAME bundle_signature_${format}
+                         COMMAND codesign --verify --strict "$<TARGET_BUNDLE_DIR:ABSee_${format}>")
+                set_tests_properties(bundle_signature_${format} PROPERTIES LABELS "fast;lint")
+            endforeach()
+        endif()
         add_test(NAME preset_bank
                  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/scripts/dsp-kit/presetlint.py" bank
                          "${CMAKE_CURRENT_SOURCE_DIR}/presets.csv" --tier P --track ${PRODUCT_KIND}

@@ -89,6 +89,11 @@ class Material:
         cls.quiet = cls.dir / "quiet.wav"          # 6 dB below the harness's pink mix
         K.write_wav(cls.quiet, P.pink(n, fs, -26.0, seed=2).astype(np.float32), fs)
         cls.quiet44 = cls.dir / "quiet44.wav"      # the same, at 44.1 kHz: resampled on load
+        cls.lowcut = cls.dir / "lowcut.wav"        # quiet, with Low (60-150 Hz) 6 dB down: feature 3
+        x = P.pink(n, fs, -26.0, seed=2).astype(np.float64)
+        f = np.fft.rfftfreq(n, 1.0 / fs)
+        cut = np.where((f >= 60.0) & (f < 150.0), 10.0 ** (-6.0 / 20.0), 1.0)
+        K.write_wav(cls.lowcut, np.fft.irfft(np.fft.rfft(x, axis=0) * cut[:, None], n=n, axis=0).astype(np.float32), fs)
         K.write_wav(cls.quiet44, P.pink(int(REF_SECONDS * 44100), 44100, -26.0, seed=2).astype(np.float32), 44100)
         cls.other = cls.dir / "other.wav"
         K.write_wav(cls.other, P.pink(n, fs, -26.0, seed=3).astype(np.float32), fs)
@@ -370,15 +375,34 @@ class DefiningFeatures(Timed):
         self.assertIn("Reference", readout)
         self.assertAlmostEqual(res["product"]["match"]["reference_gain_db"], 6.0, delta=0.15)
 
-    def test_band_deltas_are_not_measurable_yet(self):
-        """Defining feature 3 (seven band deltas) needs the shared Analysis/FFT module. The
-        test exists so the gap is visible in the suite, not only in docs/status.md, and fails
-        the day the module lands - which is when the real presence test gets written."""
-        res = run(seconds=0.5)
-        self.assertNotIn("band_deltas", res["product"],
-                         "Analysis/FFT has landed: write the band-delta presence test and "
-                         "remove this placeholder (docs/status.md, Waiting for Björn)")
+    def _band_deltas(self, reference):
+        res = run({"listen": LISTEN["reference"], "matchMode": MATCH["short"], "section": SECTION["whole"],
+                   "followTransport": 0.0}, reference=str(reference), seconds=6.0)
+        bands = res["product"]["band_deltas"]
+        self.assertEqual(bands["names"], ["Sub", "Low", "Lo-mid", "Mid", "Hi-mid", "High", "Air"])
+        self.assertEqual(bands["dropped_frames"], 0)
+        self.assertNotIn(None, bands["delta_db"], "a band has no reading: %r" % bands)
+        return dict(zip(bands["names"], bands["delta_db"]))
 
+    def test_band_deltas_show_a_cut_band(self):
+        """Defining feature 3: seven band deltas, mix minus reference, level matched. A
+        reference with Low (60-150 Hz) 6 dB down reads Low about +6 dB and every other band
+        about 0 (measured +5.3 and within 0.4: the match gain rises 0.2 dB with the cut, and
+        the 1/6-octave bands at the edges are assigned by their centre)."""
+        d = self._band_deltas(Material.lowcut)
+        others = [v for k, v in d.items() if k != "Low"]
+        self.assertAlmostEqual(d["Low"] - float(np.median(others)), 6.0, delta=1.0,
+                               msg="the cut band does not show: %r" % d)
+        for k, v in d.items():
+            if k != "Low":
+                self.assertLess(abs(v), 1.0, "%s reads %+.2f dB with no difference there: %r" % (k, v, d))
+
+    def test_band_deltas_do_not_read_width_as_tone(self):                    # docs/failures.md
+        """The mix here has identical channels, the reference uncorrelated ones, at the same
+        loudness: the deltas are flat. Measured on the mid signal they read +3 dB in every band."""
+        d = self._band_deltas(Material.quiet)
+        for k, v in d.items():
+            self.assertLess(abs(v), 1.0, "%s reads %+.2f dB between two pink noises: %r" % (k, v, d))
 
 class BriefAcceptance(Timed):
     """The brief's own acceptance tests (sketch 6), on the plugin."""
@@ -680,7 +704,7 @@ class Goldens(Timed):
 
 
 CLASSES = (Contract, RateAndBlock, Health, Properties, DefiningFeatures, BriefAcceptance,
-           Transport, Blind, Performance, Prototype, Goldens)
+           Transport, Blind, ReferenceLoading, Performance, Prototype, Goldens)
 
 if __name__ == "__main__":
     label = None

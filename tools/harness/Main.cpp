@@ -566,6 +566,26 @@ static juce::var productMetrics (ABSeeAudioProcessor& product, const juce::Audio
     set (listen, "x_is_mix", product.blindRound().xIsMix());
     set (root, "listen", listen);
 
+    {   // defining feature 3: the seven band deltas, as the editor will read them
+        const auto d = product.bandDeltas();
+        const auto mixLevels = product.mixBandLevels(), refLevels = product.referenceBandLevels();
+        auto bands = obj();
+        juce::var names, delta, mixDb, refDb;
+        for (size_t b = 0; b < (size_t) absee::kNumBands; ++b)
+        {
+            names.append (absee::kBandNames[b]);
+            delta.append (d.valid[b] ? juce::var ((double) d.deltaDb[b]) : juce::var());
+            mixDb.append ((double) mixLevels[b]);
+            refDb.append ((double) refLevels[b]);
+        }
+        set (bands, "names", names);
+        set (bands, "delta_db", delta);
+        set (bands, "mix_db", mixDb);
+        set (bands, "reference_db", refDb);
+        set (bands, "dropped_frames", product.mixBands().droppedFrames());
+        set (root, "band_deltas", bands);
+    }
+
     auto safety = obj();
     set (safety, "wire_forced", product.renderWireForced());         // defining feature 1
     set (safety, "safe_on_render", product.renderSafety().safeOnRender());
@@ -968,6 +988,7 @@ static int run (int argc, char* argv[])
         const auto t0 = Clock::now();
         processBlockRealtime (*processor, blockBuf, midi);
         const double us = std::chrono::duration<double, std::micro> (Clock::now() - t0).count();
+        product->mixBands().drain();   // the plugin's 15 Hz timer, here after every block: reproducible (rule 8)
         if (profile)
         {
             const double deadlineUs = 1.0e6 * (double) juce::jmax (1, n) / rate;

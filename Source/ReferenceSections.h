@@ -6,7 +6,8 @@
 #include <atomic>
 #include <memory>
 
-/*  A B see - from a decoded reference to what the audio thread plays: the sections.
+/*  A B see - from a decoded reference to what the audio thread plays: the sections, each with
+    its loudness, true peak and seven band levels (feature 3, BandDeltas.h).
 
     `oberli::references::load` decodes and resamples to the session rate; this builds the
     `ReferenceBuffer` the store hands out, with every section measured by the shared
@@ -28,7 +29,7 @@ inline constexpr double kLoudestHopSeconds = 0.5;
 std::unique_ptr<ReferenceBuffer> buildReferenceBuffer (oberli::references::Track&& track, const SlotState& slot,
                                                        const std::atomic<bool>* cancel = nullptr);
 
-/** One section's integrated loudness and true peak, by the shared meter. */
+/** One section's integrated loudness and true peak (the shared meter) and its seven bands. */
 SectionAnalysis analyseSection (const juce::AudioBuffer<float>& audio, double sampleRate,
                                 double inSeconds, double outSeconds);
 } // namespace absee

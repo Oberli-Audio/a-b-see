@@ -89,6 +89,9 @@ void ABSeeAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     trimSmoothed.reset (trimParam->load());
     mixAnalyser->prepare (sampleRate, preparedBlockSize);
     loader.setSessionRate (sampleRate);   // a new rate reloads the references at it
+    mixSpectrum.prepare (sampleRate);
+    for (auto& b : publishedRefBands)
+        b.store (absee::kNoLevel);
 
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) preparedBlockSize, 1 };
     for (auto* f : { &rmsFilterL, &rmsFilterR })
@@ -115,6 +118,7 @@ void ABSeeAudioProcessor::reset()
     match.reset();
     trimSmoothed.reset (trimParam->load());
     mixAnalyser->reset();
+    mixSpectrum.requestReset();
     blind.reset();
     rmsFilterL.reset();
     rmsFilterR.reset();
@@ -207,6 +211,16 @@ void ABSeeAudioProcessor::renderChunk (juce::AudioBuffer<float>& chunk, bool wir
     const absee::SectionAnalysis section = referenceBuffer != nullptr
                                              ? referenceBuffer->section (sectionIndex)
                                              : absee::SectionAnalysis {};
+
+    // --- the mix's band levels (feature 3): copy the input and return; analysed off this thread.
+    // A new slot or section starts the long-term average again, so both sides cover one section.
+    if (slotIndex != lastBandSlot || sectionIndex != lastBandSection)
+    {
+        mixSpectrum.requestReset();
+        lastBandSlot = slotIndex;
+        lastBandSection = sectionIndex;
+    }
+    mixSpectrum.push (chunk, n);
 
     // --- the match policy
     const auto mode = (absee::MatchMode) juce::jlimit (0, 3, (int) std::lround (matchModeParam->load()));
@@ -301,6 +315,8 @@ void ABSeeAudioProcessor::renderChunk (juce::AudioBuffer<float>& chunk, bool wir
     publishedPlayhead.store (player.playheadSeconds(), std::memory_order_relaxed);
     publishedSectionIn.store (section.inSeconds, std::memory_order_relaxed);
     publishedSectionOut.store (section.outSeconds, std::memory_order_relaxed);
+    for (size_t b = 0; b < (size_t) absee::kNumBands; ++b)
+        publishedRefBands[b].store (haveReference ? section.bands[b] : absee::kNoLevel, std::memory_order_relaxed);
 }
 
 juce::AudioProcessorEditor* ABSeeAudioProcessor::createEditor()

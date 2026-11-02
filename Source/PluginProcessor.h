@@ -9,6 +9,7 @@
 #include <cstring>
 #include <memory>
 
+#include "BandDeltas.h"
 #include "BlindRound.h"
 #include "Crossfade.h"
 #include "MatchEngine.h"
@@ -62,7 +63,7 @@ public:
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
+    const juce::String getProgramName (int) override { return "Default"; }   // not empty: the Steinberg validator fails "Scan Programs"
     void changeProgramName (int, const juce::String&) override {}
 
     void getStateInformation (juce::MemoryBlock& destData) override;
@@ -94,6 +95,27 @@ public:
     void setMixAnalyser (std::unique_ptr<absee::MixAnalyser> analyser);
 
     absee::RenderSafety& renderSafety() noexcept { return safety; }
+
+    /** The mix side of the band deltas; its timer drains it, the harness drains it by hand. */
+    absee::MixBands& mixBands() noexcept { return mixSpectrum; }
+
+    /** Defining feature 3: the seven band deltas, mix minus reference, level matched (BandDeltas.h).
+        Any thread; every band invalid while no reference plays. */
+    absee::BandDeltaReading bandDeltas() const noexcept
+    {
+        absee::BandLevels reference;
+        for (size_t b = 0; b < (size_t) absee::kNumBands; ++b)
+            reference[b] = publishedRefBands[b].load (std::memory_order_relaxed);
+        return absee::bandDeltas (mixSpectrum.levels(), matchMixDb(), reference, matchReferenceDb());
+    }
+    absee::BandLevels mixBandLevels() const noexcept { return mixSpectrum.levels(); }
+    absee::BandLevels referenceBandLevels() const noexcept
+    {
+        absee::BandLevels reference;
+        for (size_t b = 0; b < (size_t) absee::kNumBands; ++b)
+            reference[b] = publishedRefBands[b].load (std::memory_order_relaxed);
+        return reference;
+    }
     absee::BlindRound& blindRound() noexcept { return blind; }
 
     /** Seeds every random source in the plugin (rule 8): the harness's `--seed`. */
@@ -170,6 +192,8 @@ private:
     absee::RenderSafety safety;
     absee::BlindRound blind;
     std::unique_ptr<absee::MixAnalyser> mixAnalyser;
+    absee::MixBands mixSpectrum;
+    int lastBandSlot = -1, lastBandSection = -1;   // audio thread: a change restarts the mix's average
     absee::State::Extra extra;
     // after the store and the slots it reads: destroyed first, its thread stopped before they go
     absee::ReferenceLoader loader {
@@ -190,6 +214,7 @@ private:
     std::atomic<bool> publishedWire { false }, publishedMismatch { false }, publishedRefPlaying { false };
     std::atomic<int> publishedSide { 0 };
     std::atomic<double> publishedPlayhead { 0.0 }, publishedSectionIn { 0.0 }, publishedSectionOut { 0.0 };
+    std::array<std::atomic<float>, absee::kNumBands> publishedRefBands {};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ABSeeAudioProcessor)
 };

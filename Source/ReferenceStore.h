@@ -2,6 +2,8 @@
 
 #include <juce_audio_basics/juce_audio_basics.h>
 
+#include "Bands.h"
+
 #include <array>
 #include <atomic>
 #include <memory>
@@ -37,6 +39,7 @@ struct SectionAnalysis
     double outSeconds = 0.0;
     double integratedLufs = -300.0;
     double truePeakDb = -400.0;
+    BandLevels bands = noBandLevels();   ///< long-term, seven bands (BandDeltas.h), for feature 3
 
     bool isUsable() const noexcept { return outSeconds > inSeconds; }
 };

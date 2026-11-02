@@ -1,8 +1,19 @@
 # Status - A B see 0.1.0 (2026-11-02)
-Tier P, track A (analysis; stages processing, output, analysis), at G4 closed, G5 part-closed
-(wiring the shared modules), G6 part-closed (macOS checks next). Recipe D.8.1.
+Tier P, track A (analysis; stages processing, output, analysis), at G5 closed, G6 closed
+(2026-11-02, macOS arm64); next: the editor (plugin-ui-bob), then G7 and the release gate.
+Recipe D.8.1.
 
 ## Waiting for Björn
+- 2026-11-02: **G5 and G6 are closed; the session paused here as asked** (work continues only
+  on G5/G6). Next is the editor (plugin-ui-bob, accent peacock, theme Bone, `docs/sketch.md`),
+  which is also what the listening checkpoint waits for: without it a reference can only reach
+  the plugin through a saved state, not through a DAW.
+- 2026-11-02: **Two more template bugs, fixed here, worth fixing in `Oberli-Audio/plugin-template`**
+  (`docs/failures.md`): (1) the release preset's POST_BUILD `strip -x` runs after JUCE's ad-hoc
+  signature, so every Mac release build's VST3 is killed on load (validator and pluginval exit
+  -9); (2) re-signing the Standalone in the same POST_BUILD is not enough, JUCE's menu nib
+  reaches the app afterwards: signed here in its own target `ABSee_SignStandalone`. The new
+  ctest `bundle_signature_*` catches both.
 - 2026-11-02: **`refresh_oberli.py` put the harness's theme and accent inside a CMake comment.**
   `wire_cmake` looks for the first `)` after `target_compile_definitions(<Id>Harness PRIVATE`,
   and this repo's block has a comment with a parenthesis in it, so
@@ -39,9 +50,9 @@ Tier P, track A (analysis; stages processing, output, analysis), at G4 closed, G
   owner-confirmed brief says 5 ms equal-power; it is built as the brief says. Measured at G3
   on the prototype and at G5 on the plugin with the brief's own test (1 kHz sine both sides,
   200 switches): if 5 ms passes it stays, confirm or ask for 10 ms.
-- 2026-11-01: **Listening checkpoint** due when the match gain works end to end (needs the
-  shared Loudness module): Mix vs Reference on one of your worship masters, Integrated and
-  Short 3 s, Blind on.
+- 2026-11-01: **Listening checkpoint** due when the editor can load a reference (the match gain
+  works end to end since 2026-11-02): Mix vs Reference on one of your worship masters,
+  Integrated and Short 3 s, Blind on.
 - 2026-11-01: **Host checks** (Live 10.1 under Rosetta, Live on Windows) cannot run in the
   cloud session; they are the two-host list of the release gate.
 - 2026-11-01: **Build slice.** This session builds on Linux/x86_64 with GCC 13 (no macOS, no
@@ -57,8 +68,8 @@ Tier P, track A (analysis; stages processing, output, analysis), at G4 closed, G
 | G2 | closed 2026-11-01 | `sound design/prototype/absee_proto.py` (numpy, track A: analysis prototypes are numpy, not Faust - F.15.1), one class per C++ module; `python3 "sound design/prototype/absee_proto.py" --demo` -> 4 renders, checked programmatically at G3, **not heard yet** |
 | G3 | prototype side closed 2026-11-01, plugin side open | `python3 "sound design/prototype/proto_measure.py" --all` -> 10/10 pass, numbers in the metric table below (JSON: `sound design/prototype/g3-prototype.json`) |
 | G4 | closed 2026-11-01 | `cmake --preset release -G Ninja && cmake --build --preset release` -> clean, no warnings in `Source/**`; one module per prototype class, the two shared modules behind seams (`MixAnalysis.h`, `ReferenceStore.h`) |
-| G5 | part-closed 2026-11-02 | `test_plugin_matches_the_prototype` -> residual **-108.9 dBFS** after the switch has settled (threshold -90; the first 10 ms are the port's fade-in from Mix and are excluded, measured -32.7 dBFS there; Linux run, passes on macOS arm64). Defining features by name: `test_render_is_always_the_wire` (bit-exact), `test_match_readout_says_what_it_did`, and since 2026-11-02 `test_live_match_lands_within_the_brief` (the shared meter live, numbers in the live-match table below); the plugin's own reference loader: `test_plugin_loader_plays_what_the_harness_loader_plays` (bit-identical), `test_restored_project_plays_its_reference`, `test_missing_reference_says_so_and_keeps_the_mix`. **Open:** feature 3 (band deltas, `Analysis` has landed) |
-| G6 | part-closed 2026-11-02 | `ctest --preset all` -> **10/10 pass** on macOS arm64 (suite fast 12 s, render 20 s, `bounce_null`, the three shared-code tests, three lints), every render under the malloc trap; `PRODUCT_MALLOC_TRAP_SELFTEST=1 ABSeeHarness --signal=impulse` -> aborts, exit 134 ("malloc inside processBlock"); RTSan (`eval "$(python3 scripts/dsp-kit/toolchain.py env)" && cmake --preset rtsan && cmake --build --preset rtsan`, Homebrew LLVM 23.1.4): `PRODUCT_RTSAN_SELFTEST=1` -> aborts, exit 134 ("RealtimeSanitizer: unsafe-library-call"), `ctest --test-dir build-rtsan -R 'suite_|bounce_null|harness_contract'` -> **4/4 clean**; `perf.py run --presets all --config 48000/64 --runs 3` -> **OK on both slices**, worst p99.9 **2.1 %** (x86_64 under Rosetta, `blind-session`), arm64 1.7 %, every max a scheduling reading (`docs/perf.md`, baseline `docs/perf.json`); `paramgen.py check --list-params --manual docs/parameters.md` -> OK, 11 parameters; `presetlint.py bank --tier P --track effect` -> OK, 9 presets. **Open:** `validate_plugin.py full` (pluginval, Steinberg validator), the golden re-rendered on arm64; `paramgen.py check --frozen` (no release yet). Hosts: Live 10.1 Rosetta -, Live Windows - |
+| G5 | closed 2026-11-02 | `test_plugin_matches_the_prototype` -> residual **-108.9 dBFS** after the switch has settled (threshold -90; the first 10 ms are the port's fade-in from Mix and are excluded). Every defining feature has a presence test on the plugin, each proven on a planted-defect build: (1) `test_render_is_always_the_wire` (bit-exact); (2) `test_match_readout_says_what_it_did` and `test_live_match_lands_within_the_brief` (the shared meter live: Integrated +0.057 LU, Short +0.003 LU, True peak -0.084 dB against 0.1); (3) `test_band_deltas_show_a_cut_band` (Low cut 6 dB reads +5.3 dB, the other six within 0.4) and `test_band_deltas_do_not_read_width_as_tone`. Band deltas have no prototype counterpart (the G2 prototype has none), so feature 3 is proven against a signal with a known answer, not nulled. The plugin's reference loader: `test_plugin_loader_plays_what_the_harness_loader_plays` (bit-identical), `test_restored_project_plays_its_reference`, `test_missing_reference_says_so_and_keeps_the_mix` |
+| G6 | closed 2026-11-02 | `validate_plugin.py --profile full --no-build --plugin "build/ABSee_artefacts/Release/VST3/A B see.vst3" --test-cmd "ctest --preset fast" --rtsan-cmd "ctest --test-dir build-rtsan -R 'suite_|bounce_null|harness_contract'"` -> **PASS**: Steinberg validator **47/47** (SDK 3.8.1), pluginval **strictness 10** at 44.1-192 kHz, seed 0x48505631, ctest 11/11, RTSan suite clean (`build/validation/summary.json`). `ctest --preset all` -> **12/12** (every render under the malloc trap). Malloc trap and RTSan self-tests abort (exit 134). `perf.py run --presets all --config 48000/64 --runs 3` -> OK on both slices, worst p99.9 **2.1 %** (x86_64 under Rosetta), arm64 1.7 % (`docs/perf.md`, baseline `docs/perf.json`). `paramgen.py check --list-params --manual docs/parameters.md` -> OK, 11 parameters; `presetlint.py bank --tier P --track effect` -> OK, 9 presets. Golden: the committed one (Linux, tagged x86_64) nulls at -168.6 dBFS on this Mac's x86_64 slice (same-slice threshold -140) and -139.6 dBFS on arm64 (cross-slice threshold -100), so not regenerated (D.3.5: no sound change). Left for the release gate: the two Ableton host checks, `paramgen.py check --frozen` after the first release |
 | G7 | - | - |
 
 ## Metric table (G3, prototype; build Linux/x86_64, commit at the time of the run)
@@ -119,10 +130,16 @@ a build can explain another's failure.
 | C (2026-11-02) | `buildReferenceBuffer` labels the buffer with the file's rate | `test_reference_at_another_rate_is_resampled_on_load` | "False is not true" (the player saw a rate mismatch and stayed silent) |
 | D (2026-11-02) | `ReferenceLoader` never publishes (both publish points) | `test_plugin_loader_plays_what_the_harness_loader_plays`, `test_restored_project_plays_its_reference` | "the plugin's loader published nothing", "the restored reference does not play" |
 | D (2026-11-02) | `ReferenceLoader::accept` drops the load error | `test_missing_reference_says_so_and_keeps_the_mix` | "0 != 1" (no error for the slot) |
+| E (2026-11-02) | the band levels measured on the mid signal (the defect found and fixed, `docs/failures.md`) | `test_band_deltas_do_not_read_width_as_tone` | "Sub reads +2.86 dB between two pink noises" |
+| F (2026-11-02) | the mix side never publishes its band levels | `test_band_deltas_show_a_cut_band` | "a band has no reading" (all seven None) |
 
 A first build D blocked only the inline publish: the next tick's retry published one block late,
 `test_restored_project_plays_its_reference` rightly still passed and the bit-identity test
 caught the late block (-19.3 dBFS). The table's build D blocks both publish points.
+Correction: checkpoint `9c8f9d7` reported `ctest --preset all` 10/10 with the three
+`ReferenceLoading` tests in it, but the suite registers its classes in a `CLASSES` tuple and the
+new class was missing, so ctest did not run them then (they ran and were proven directly). Fixed
+the same day; they run in `suite_fast` since.
 
 `test_plugin_matches_the_prototype` also failed in build B, as it must: the trim offset is a
 real difference from the prototype. The remaining tests are contract and health checks, which
@@ -137,26 +154,24 @@ guard defects the harness itself reports (NaN, latency, state) rather than a fea
 
 ## Handoff
 Task: build A B see from G1 to a validated Tier P plugin.
-Plan: 1. [x] G1 decisions 2. [x] G2 numpy prototype 3. [x] G3 measure the prototype (10/10)
-4. [x] G4 port to C++ with the seams and the harness hooks 5. [x] test suite 6. [x] preset
-bank (9, lint green) 7. [x] G5 null against the prototype 8. [x] one committed golden 9. [x]
-every presence test proven on a planted-defect build 10. [x] on the Mac: `Source/oberli/`
-refreshed, release build and `ctest --preset all` green 11. [x] the live meter and the shared
-reference loader wired, proven (builds C) 12. [x] G6 on the Mac: malloc trap self-test, RTSan
-build and suite, `perf.py` on both slices 12b. [ ] `validate_plugin.py full`, golden
-re-rendered on arm64 13. [x] the plugin's reference loader (`Source/ReferenceLoader.*`: worker
-decode, message-thread publish, follows the slot, reloads on a new rate or new marks), proven
-(build D) 14. [ ] feature 3, band deltas, on `oberli::Analysis` 15. [ ] the editor
-(plugin-ui-bob) 16. [ ] README, CHANGELOG (ship-bob) 17. [ ] the two Ableton host checks and
-the listening checkpoint (Björn).
-Working tree: clean after the checkpoint commit. Build: green on macOS (universal, LTO), no
-warnings in `Source/` or `tools/`.
-Tests: `ctest --preset all` -> 10/10.
+Plan: 1-9. [x] G1-G5 on Linux (see the gate table) 10. [x] on the Mac: `Source/oberli/`
+refreshed (plugin-template 0e7d4f4) 11. [x] the live meter and the shared reference path
+(build C) 12. [x] G6 on the Mac: trap, RTSan, perf on both slices, full validation 13. [x] the
+plugin's own reference loader (build D) 14. [x] feature 3, band deltas (builds E, F) 15. [ ]
+**paused here 2026-11-02 at the end of G6, as Björn asked** 16. [ ] the editor (plugin-ui-bob):
+Listen switch, the seven band deltas as hero (`processor.bandDeltas()`, sign hidden in blind
+mode), the match readout, reference slots with a file chooser into `slotState().path` (the
+loader picks it up), markers and "Align here"; decide then whether `extra.slots` needs a lock
+against a host's `setStateInformation` thread 17. [ ] G7, README, CHANGELOG, notices
+(ship-bob) 18. [ ] the two Ableton host checks and the listening checkpoint (Björn).
+Working tree: clean after the checkpoint commit. Build: green on macOS (universal, LTO, signed
+ad hoc), no warnings in `Source/` or `tools/`.
+Tests: `ctest --preset all` -> 12/12; `validate_plugin.py full` -> PASS.
 Python: CMake must find a python3 with numpy and scipy, or the suite is silently not
 registered. On this Mac it found Homebrew's 3.12 (no numpy) first; configured with
-`-DPython3_EXECUTABLE=/usr/bin/python3` (cached in `build/`).
+`-DPython3_EXECUTABLE=/usr/bin/python3` (cached in `build/` and `build-rtsan/`).
 Open questions for the owner: the Waiting-for-Björn lines above.
-Next command: `python3 scripts/dsp-kit/validate_plugin.py --profile full --no-build --plugin "build/ABSee_artefacts/Release/VST3/A B see.vst3"`
+Next command: the editor, with plugin-ui-bob; before it, `cmake --build --preset release && ctest --preset all`.
 
 The prototype's renders are **not** committed: `.gitignore` keeps WAVs out of this repo
 (project policy, CLAUDE.md) and the renders are reproducible in one seeded command
@@ -164,6 +179,17 @@ The prototype's renders are **not** committed: `.gitignore` keeps WAVs out of th
 measurement script and `g3-prototype.json`.
 
 ## Decisions
+- 2026-11-02: **Band deltas (feature 3): channel powers, not the mid signal; seven bands by
+  1/6-octave centre.** Each side's channels go through their own `oberli::Spectrum` (1/6 octave,
+  FFT 8192) and the powers are summed, as BS.1770 sums them, so a width difference never reads
+  as a tonal one (`docs/failures.md`). The seven bands of the sketch take every 1/6-octave band
+  whose centre lies inside their edges. The reference's levels are measured per section on
+  load; the mix's long-term average restarts when the slot or the section changes, so both
+  sides cover one section. Deltas are level matched with the match gains. The mix is copied
+  by the audio thread into the shared `AudioCopy` and analysed by one consumer (a 15 Hz
+  message-thread timer; the harness after every block, so a render is reproducible). Rejected
+  if pink noise against pink noise reads more than 1 dB in any band, or a 6 dB band cut reads
+  outside 5-7 dB (`test_band_deltas_*`).
 - 2026-11-02: **The plugin decodes its own references, one writer to the store.**
   `absee::ReferenceLoader` (a 10 Hz message-thread timer and one low-priority worker thread)
   is the only code that writes `ReferenceStore`: the worker decodes and measures, the timer
