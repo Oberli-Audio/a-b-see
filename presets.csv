@@ -1,2 +1,10 @@
 slug,name,category,tags,edge,author,notes
-init,Init,Bed,,N,Oberli Audio,the parameter table's defaults (category: the brief's list; Bed until G0 decides)
+init,Init,Mastering,,N,Oberli Audio,the parameter table's defaults
+master-vs-reference,Master vs Reference,Mastering,,N,Oberli Audio,the everyday job: integrated match on the loudest 10 s
+true-peak-compare,True Peak Compare,Mastering,,Y,Oberli Audio,"edge: judges limiter density and punch, which loudness matching hides"
+loud-master-meet,Loud Master Meet,Mastering,,N,Oberli Audio,"Trim mix instead: a loud master and a quiet reference meet at the target"
+raw-levels,Raw Levels,Mastering,,N,Oberli Audio,"match off: both sides at the level they are actually delivered at"
+verse-check-short,Verse Check Short-Term,Mixing,,Y,Oberli Audio,edge: short-term match on section 1 for a quiet verse
+blind-session,Blind Session,Mixing,,Y,Oberli Audio,edge: blind X/Y over the whole reference
+chorus-vs-chorus,Chorus vs Chorus,Mixing,,N,Oberli Audio,section 1 in step with the transport: my chorus against their chorus
+live-room-check,Live Room Check,Live,,N,Oberli Audio,free-running loop so the reference plays while the DAW stands still

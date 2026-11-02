@@ -1,0 +1,24 @@
+{
+  "flags": {
+    "seed": 1,
+    "sample_rate": 48000,
+    "block": 512,
+    "seconds": 3.0,
+    "signal": "noise:pink:-20",
+    "reference": "quiet",
+    "mix_reading": "-27.0",
+    "automate": "listen:0.0=0.0,0.5=1.0,2.0=0.0"
+  },
+  "params": {
+    "matchMode": 0.0,
+    "section": 0.0,
+    "followTransport": 0.0,
+    "trim": 0.5625,
+    "mono": 0.0
+  },
+  "arch": "x86_64",
+  "commit": "6e272dd3e26f",
+  "feedback": false,
+  "regenerate": "HARNESS=... python3 tools/tests/make_golden.py",
+  "note": "the `reference` flag names a Material attribute, not a path"
+}

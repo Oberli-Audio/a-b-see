@@ -2,6 +2,8 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "ReferenceStore.h"
+
 /*  The product's state and preset format (sound-design-bob D.5.3, D.6.5).
 
     Session state and every preset file carry one <ABSeeState version="N" dspVersion="M">
@@ -65,6 +67,67 @@ inline bool fromXml (const juce::XmlElement& root, juce::AudioProcessorValueTree
         const auto range = ranged->getNormalisableRange();
         plain = juce::jlimit ((double) range.start, (double) range.end, plain);
         ranged->setValueNotifyingHost (ranged->convertTo0to1 ((float) plain));
+    }
+    return true;
+}
+
+/** Everything in a session that is not a host parameter (sketch 3): which references are
+    loaded and what the shared cache said about them, the section markers per reference, the
+    align pair per reference, and the "Safe on render" item.
+
+    Not here, on purpose: the blind tally and the round (editor state, lost on close, sketch
+    4.4), the decoded audio (it is re-decoded from the path by `oberli::References`), and the
+    window scale (machine-local, not project state). A **preset** carries none of this: a
+    preset is the parameter table, and a reference belongs to a project, not to a preset. */
+struct Extra
+{
+    bool safeOnRender = true;
+    std::array<absee::SlotState, absee::kNumSlots> slots {};
+};
+
+inline void writeExtra (juce::XmlElement& stateRoot, const Extra& extra)
+{
+    auto* e = stateRoot.getChildByName ("Extra");
+    if (e == nullptr)
+        e = stateRoot.createNewChildElement ("Extra");
+    e->setAttribute ("safeOnRender", extra.safeOnRender ? 1 : 0);
+    for (int i = 0; i < absee::kNumSlots; ++i)
+    {
+        const auto& s = extra.slots[(size_t) i];
+        if (s.isEmpty())
+            continue;
+        auto* slot = e->createNewChildElement ("Slot");
+        slot->setAttribute ("index", i);
+        slot->setAttribute ("path", s.path);
+        slot->setAttribute ("lufs", s.cachedLufs);
+        slot->setAttribute ("truePeak", s.cachedTruePeakDb);
+        slot->setAttribute ("alignDaw", s.alignDawSeconds);
+        slot->setAttribute ("alignRef", s.alignRefSeconds);
+        for (int m = 0; m < 8; ++m)
+            slot->setAttribute ("m" + juce::String (m), s.marks[(size_t) m]);
+    }
+}
+
+inline bool readExtra (const juce::XmlElement& stateRoot, Extra& extra)
+{
+    const auto* e = stateRoot.getChildByName ("Extra");
+    if (e == nullptr)
+        return false;
+    extra.safeOnRender = e->getIntAttribute ("safeOnRender", 1) != 0;
+    extra.slots = {};
+    for (auto* slot : e->getChildWithTagNameIterator ("Slot"))
+    {
+        const int i = slot->getIntAttribute ("index", -1);
+        if (! juce::isPositiveAndBelow (i, absee::kNumSlots))
+            continue;
+        auto& s = extra.slots[(size_t) i];
+        s.path = slot->getStringAttribute ("path");
+        s.cachedLufs = slot->getDoubleAttribute ("lufs", -300.0);
+        s.cachedTruePeakDb = slot->getDoubleAttribute ("truePeak", -400.0);
+        s.alignDawSeconds = slot->getDoubleAttribute ("alignDaw", 0.0);
+        s.alignRefSeconds = slot->getDoubleAttribute ("alignRef", 0.0);
+        for (int m = 0; m < 8; ++m)
+            s.marks[(size_t) m] = slot->getDoubleAttribute ("m" + juce::String (m), 0.0);
     }
     return true;
 }

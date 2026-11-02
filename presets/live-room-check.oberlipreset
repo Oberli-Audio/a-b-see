@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<OberliPreset name="Live Room Check" author="Oberli Audio" category="Live"
+              description="The loudest 10 seconds looping freely, so the reference plays while the DAW stands still."
+              pluginVersion="0.1.0" created="2026-11-01" factory="true">
+  <ABSeeState version="1" dspVersion="1">
+    <PARAMETERS>
+      <PARAM id="listen" value="1"/>
+      <PARAM id="refSlot" value="0"/>
+      <PARAM id="matchMode" value="0"/>
+      <PARAM id="blind" value="0"/>
+      <PARAM id="trim" value="0"/>
+      <PARAM id="mono" value="0"/>
+      <PARAM id="followTransport" value="0"/>
+      <PARAM id="trimMixInstead" value="0"/>
+      <PARAM id="section" value="5"/>
+      <PARAM id="matchTarget" value="-14"/>
+      <PARAM id="bypass" value="0"/>
+    </PARAMETERS>
+    <Extra/>
+  </ABSeeState>
+</OberliPreset>

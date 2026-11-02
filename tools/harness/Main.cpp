@@ -159,8 +159,27 @@ const char* const kUsage =
     "  --reprepare-at=<t>:<rate>/<block>      prepareToPlay again mid-render; repeatable\n"
     "  --preset-at=<t>:<slug>       load a factory preset at t seconds; repeatable\n"
     "  --profile --warmup=<n>       time every processBlock; exclude n blocks from the distribution\n"
-    "  --solo=<part>                product-specific isolation (see the hooks at the end of Main.cpp)\n"
-    "  --list-params | --list-presets   JSON lists; exit\n";
+    "  --solo=<part>                mix | reference: snap the Listen switch to that side\n"
+    "  --list-params | --list-presets   JSON lists; exit\n"
+    "\n"
+    "A B see's own flags. They stand in for the two shared modules that have not landed yet\n"
+    "(docs/status.md, Waiting for Björn), so the DSP around them can be measured today; each\n"
+    "one is the exact call the shared module will make.\n"
+    "  --nonrealtime                render as the host's offline export does (isNonRealtime):\n"
+    "                               the plugin must be the wire (defining feature 1)\n"
+    "  --reference=<file.wav>       fill the next reference slot, 1 to 8, in order. Stands in\n"
+    "                               for oberli::References: the harness decodes, analyses each\n"
+    "                               section with its own BS.1770 path and publishes the buffer.\n"
+    "                               A file whose rate differs from --sample-rate is refused\n"
+    "                               (References resamples on load; the harness does not)\n"
+    "  --marks=<slot>,<n>,<in>,<out>   section n (1-4) of slot (1-8), in seconds; repeatable\n"
+    "  --align=<slot>,<daw>,<ref>   the \"Align here\" pair of a slot, in seconds\n"
+    "  --transport=<bpm>[,<start>]  a playing host clock from <start> seconds; --transport=stopped\n"
+    "                               gives a stopped one. Without it there is no playhead at all\n"
+    "  --mix-reading=<i>[,<s>[,<tp>]]   inject the mix meter's readings (LUFS, LUFS, dBTP)\n"
+    "  --mix-meter=prepass          measure the input signal with the harness's own BS.1770\n"
+    "                               path and inject that as the mix reading\n"
+    "  --safe-on-render=0|1         the \"Safe on render\" menu item (default 1)\n";
 
 struct Args
 {
@@ -184,7 +203,9 @@ Args parseArgs (int argc, char* argv[])
 {
     static const juce::StringArray known { "help", "seed", "sample-rate", "block", "max-block", "seconds", "preset", "param",
         "automate", "bend", "mod", "notes", "midi", "gate", "reprepare-at", "in", "signal", "out", "state-in", "state-out",
-        "profile", "preset-at", "warmup", "solo", "list-params", "list-presets" };
+        "profile", "preset-at", "warmup", "solo", "list-params", "list-presets",
+        // A B see's own flags (--help says what each one stands in for)
+        "nonrealtime", "reference", "marks", "align", "transport", "mix-reading", "mix-meter", "safe-on-render" };
     Args a;
     for (int i = 1; i < argc; ++i)
     {
@@ -438,17 +459,174 @@ double dbOf (double lin) { return lin > 0.0 ? 20.0 * std::log10 (lin) : -300.0; 
 } // namespace
 
 //==============================================================================
-// Product hooks (the two TODOs of the contract). The skeleton has no solo parts and no product
-// metrics; a product fills these in beside its DSP (Horizon Pad: layers, keyboard, mix pocket).
-static bool applySolo (juce::AudioProcessor&, const juce::String& part)
+// A B see's stand-ins for the two shared modules (docs/status.md, Waiting for Björn). Each one
+// does exactly what the shared module will do and nothing more, so the tests written against
+// them keep passing when the real thing lands.
+namespace
 {
-    juce::ignoreUnused (part);
-    return false;   // unknown part: refused with exit 2
+/** Stands in for `oberli::Loudness`: constant readings, injected by `--mix-reading` or
+    measured from the input signal by `--mix-meter=prepass`. It is **not** a meter - it does
+    not integrate, gate or follow the audio - which is why it lives in the harness and not in
+    `Source/`. What it makes measurable today is the match *policy* (MatchEngine). */
+class ScriptedMixAnalyser final : public absee::MixAnalyser
+{
+public:
+    explicit ScriptedMixAnalyser (absee::MixReading r) : reading (r) {}
+    void prepare (double, int) override {}
+    void reset() override {}
+    void process (const juce::AudioBuffer<float>&, int) noexcept override {}
+    absee::MixReading read() const noexcept override { return reading; }
+
+private:
+    absee::MixReading reading;
+};
+
+/** A host clock, so the transport map can be measured without a DAW. */
+class HarnessPlayHead final : public juce::AudioPlayHead
+{
+public:
+    HarnessPlayHead (double bpmToUse, double startSeconds, bool playing)
+        : bpm (bpmToUse), seconds (startSeconds), isPlaying (playing) {}
+
+    juce::Optional<PositionInfo> getPosition() const override
+    {
+        PositionInfo info;
+        info.setTimeInSeconds (seconds);
+        info.setTimeInSamples ((juce::int64) std::llround (seconds * rate));
+        info.setPpqPosition (seconds * bpm / 60.0);
+        info.setBpm (bpm);
+        info.setIsPlaying (isPlaying);
+        info.setIsRecording (false);
+        return info;
+    }
+    bool canControlTransport() override { return false; }
+
+    void advanceTo (double newSeconds, double sampleRate) noexcept { seconds = newSeconds; rate = sampleRate; }
+
+private:
+    double bpm = 120.0, seconds = 0.0, rate = 48000.0;
+    bool isPlaying = true;
+};
+
+/** Stands in for `oberli::References`: decode (here: read a WAV at the session rate), analyse
+    every section off the audio thread, and hand the buffer to the store. The analysis uses the
+    harness's own BS.1770 path above, the same one every other measurement in this file uses. */
+std::unique_ptr<absee::ReferenceBuffer> buildReference (const juce::File& file, double rate,
+                                                        const absee::SlotState& slot, juce::String& error)
+{
+    juce::AudioFormatManager fm;
+    fm.registerBasicFormats();
+    std::unique_ptr<juce::AudioFormatReader> reader (fm.createReaderFor (file));
+    if (reader == nullptr)
+    {
+        error = "cannot read " + file.getFullPathName();
+        return {};
+    }
+    if (std::abs (reader->sampleRate - rate) > 0.5)
+    {
+        error = file.getFileName() + " is at " + juce::String (reader->sampleRate, 0)
+              + " Hz, the session is at " + juce::String (rate, 0)
+              + " Hz (oberli::References resamples on load; the harness does not)";
+        return {};
+    }
+    auto buffer = std::make_unique<absee::ReferenceBuffer>();
+    buffer->sampleRate = rate;
+    buffer->name = file.getFileNameWithoutExtension();
+    buffer->audio.setSize ((int) juce::jmin ((unsigned) 2, reader->numChannels), (int) reader->lengthInSamples);
+    reader->read (&buffer->audio, 0, (int) reader->lengthInSamples, 0, true, true);
+
+    const int total = buffer->audio.getNumSamples();
+    const double length = (double) total / rate;
+    const auto analyse = [&] (double inSeconds, double outSeconds) -> absee::SectionAnalysis
+    {
+        absee::SectionAnalysis s;
+        s.inSeconds = juce::jlimit (0.0, length, inSeconds);
+        s.outSeconds = juce::jlimit (s.inSeconds, length, outSeconds);
+        const int from = (int) std::llround (s.inSeconds * rate);
+        const int n = juce::jmin (total - from, (int) std::llround ((s.outSeconds - s.inSeconds) * rate));
+        if (n <= 0)
+            return s;
+        juce::AudioBuffer<float> slice (const_cast<float* const*> (buffer->audio.getArrayOfReadPointers()),
+                                        buffer->audio.getNumChannels(), from, n);
+        s.integratedLufs = measureLoudness (slice, rate).integrated;
+        s.truePeakDb = dbOf (truePeak (slice));
+        return s;
+    };
+
+    buffer->sections[0] = analyse (0.0, length);                       // Whole
+    for (int m = 0; m < 4; ++m)                                        // the user's markers
+    {
+        const double in = slot.marks[(size_t) (m * 2)], out = slot.marks[(size_t) (m * 2 + 1)];
+        buffer->sections[(size_t) (1 + m)] = out > in ? analyse (in, out) : absee::SectionAnalysis {};
+    }
+    {   // Loudest 10 s: the 10 s window with the highest short-term loudness, found on load
+        const double window = juce::jmin (10.0, length);
+        double bestStart = 0.0, best = -400.0;
+        for (double start = 0.0; start + window <= length + 1.0e-9; start += 0.5)
+        {
+            const int from = (int) std::llround (start * rate);
+            const int n = juce::jmin (total - from, (int) std::llround (window * rate));
+            if (n <= 0)
+                break;
+            juce::AudioBuffer<float> slice (const_cast<float* const*> (buffer->audio.getArrayOfReadPointers()),
+                                            buffer->audio.getNumChannels(), from, n);
+            const double l = measureLoudness (slice, rate).integrated;
+            if (l > best)
+            {
+                best = l;
+                bestStart = start;
+            }
+        }
+        buffer->sections[5] = analyse (bestStart, bestStart + window);
+    }
+    return buffer;
+}
+} // namespace
+
+/** `--solo=mix|reference` snaps the Listen switch to one side with no fade, so a render can be
+    compared with the prototype's one side at a time (G5). */
+static bool applySolo (juce::AudioProcessor& processor, const juce::String& part)
+{
+    auto* product = dynamic_cast<ABSeeAudioProcessor*> (&processor);
+    if (product == nullptr)
+        return false;
+    if (part != "mix" && part != "reference")
+        return false;
+    if (auto* p = product->parameters().getParameter (Params::listen))
+        p->setValueNotifyingHost (part == "reference" ? 1.0f : 0.0f);
+    return true;
 }
 
-static juce::var productMetrics (const juce::AudioBuffer<float>&, double)
+static juce::var productMetrics (ABSeeAudioProcessor& product, const juce::AudioBuffer<float>&, double,
+                                 int maxResident, int maxRetired)
 {
-    return obj();
+    auto root = obj();
+    auto match = obj();
+    set (match, "readout", product.matchReadout());                  // defining feature 2
+    set (match, "reference_gain_db", (double) product.matchReferenceDb());
+    set (match, "mix_gain_db", (double) product.matchMixDb());
+    set (root, "match", match);
+
+    auto reference = obj();
+    set (reference, "resident", maxResident);     // the most that were decoded at once (brief: 2)
+    set (reference, "retired", maxRetired);
+    set (reference, "playing", product.referenceIsPlaying());
+    set (reference, "rate_mismatch", product.referenceRateMismatch());
+    set (reference, "playhead_s", product.referencePlayheadSeconds());
+    set (reference, "section_in_s", product.activeSectionIn());
+    set (reference, "section_out_s", product.activeSectionOut());
+    set (root, "reference", reference);
+
+    auto listen = obj();
+    set (listen, "side", product.listenSide() == 1 ? "reference" : "mix");
+    set (listen, "x_is_mix", product.blindRound().xIsMix());
+    set (root, "listen", listen);
+
+    auto safety = obj();
+    set (safety, "wire_forced", product.renderWireForced());         // defining feature 1
+    set (safety, "safe_on_render", product.renderSafety().safeOnRender());
+    set (root, "render_safety", safety);
+    return root;
 }
 
 //==============================================================================
@@ -506,7 +684,12 @@ static int run (int argc, char* argv[])
     if (! isInstrument) layout.inputBuses.add (juce::AudioChannelSet::stereo());
     layout.outputBuses.add (juce::AudioChannelSet::stereo());
     if (! processor->setBusesLayout (layout)) refuse ("the processor refuses the stereo layout");
-    processor->setNonRealtime (false);
+    const bool nonRealtime = args.has ("nonrealtime");
+    processor->setNonRealtime (nonRealtime);
+    product->setRandomSeed ((juce::uint32) seed);                      // rule 8
+    if (args.has ("safe-on-render"))
+        product->renderSafety().setSafeOnRender (args.get ("safe-on-render") != "0");
+
     processor->prepareToPlay (rate, maxBlock);
 
     // -------- state in
@@ -564,6 +747,85 @@ static int run (int argc, char* argv[])
         ramps.push_back (r);
     }
 
+    // -------- A B see: marks, align pairs, references (after the state and the params, so a
+    // flag always beats what a state file or a preset brought, as --param beats --preset)
+    for (auto spec : args.all ("marks"))
+    {
+        auto f = juce::StringArray::fromTokens (spec, ",", "");
+        if (f.size() != 4) refuse ("--marks needs <slot>,<n>,<in>,<out>: " + spec);
+        const int slot = (int) numberOr (f[0], "--marks slot");
+        const int which = (int) numberOr (f[1], "--marks n");
+        if (! juce::isPositiveAndBelow (slot - 1, absee::kNumSlots) || which < 1 || which > 4)
+            refuse ("--marks: slot is 1-8 and n is 1-4: " + spec);
+        auto& s = product->slotState (slot - 1);
+        s.marks[(size_t) ((which - 1) * 2)] = numberOr (f[2], "--marks in");
+        s.marks[(size_t) ((which - 1) * 2 + 1)] = numberOr (f[3], "--marks out");
+    }
+    for (auto spec : args.all ("align"))
+    {
+        auto f = juce::StringArray::fromTokens (spec, ",", "");
+        if (f.size() != 3) refuse ("--align needs <slot>,<daw>,<ref>: " + spec);
+        const int slot = (int) numberOr (f[0], "--align slot");
+        if (! juce::isPositiveAndBelow (slot - 1, absee::kNumSlots))
+            refuse ("--align: slot is 1-8: " + spec);
+        auto& s = product->slotState (slot - 1);
+        s.alignDawSeconds = numberOr (f[1], "--align daw");
+        s.alignRefSeconds = numberOr (f[2], "--align ref");
+    }
+    // The decoded buffers the harness keeps as `oberli::References` would: the store holds at
+    // most two (the brief's residency rule), so the active slot is (re)published on demand
+    // between blocks, which is exactly what References does when the user switches slots.
+    std::array<std::unique_ptr<absee::ReferenceBuffer>, absee::kNumSlots> decoded;
+    int referencesLoaded = 0;
+    for (auto spec : args.all ("reference"))
+    {
+        if (referencesLoaded >= absee::kNumSlots) refuse ("--reference: there are 8 slots");
+        auto file = juce::File::getCurrentWorkingDirectory().getChildFile (spec);
+        juce::String error;
+        auto buffer = buildReference (file, rate, product->slotState (referencesLoaded), error);
+        if (buffer == nullptr) refuse ("--reference " + error);
+        product->slotState (referencesLoaded).path = file.getFullPathName();
+        decoded[(size_t) referencesLoaded] = std::move (buffer);
+        ++referencesLoaded;
+    }
+    int maxResident = 0, maxRetired = 0;
+    const auto republishActiveSlot = [&] ()
+    {
+        // refSlot is a choice ("1".."8"): its raw value is the 0-based slot index
+        const int slot = juce::jlimit (0, absee::kNumSlots - 1,
+                                       (int) std::lround (apvts.getRawParameterValue (Params::refSlot)->load()));
+        auto& store = product->referenceStore();
+        store.setActive (slot);
+        store.collectGarbage();
+        if (store.acquire (slot) == nullptr && decoded[(size_t) slot] != nullptr)
+        {
+            auto copy = std::make_unique<absee::ReferenceBuffer> (*decoded[(size_t) slot]);
+            if (! store.publish (slot, copy))
+                std::cerr << "note: slot " << (slot + 1) << " could not be published yet" << std::endl;
+        }
+    };
+
+    // -------- the host clock (--transport), so the transport map can be measured
+    std::unique_ptr<HarnessPlayHead> playHead;
+    double transportStart = 0.0;
+    if (args.has ("transport"))
+    {
+        const auto spec = args.get ("transport");
+        if (spec == "stopped")
+        {
+            playHead = std::make_unique<HarnessPlayHead> (120.0, 0.0, false);
+        }
+        else
+        {
+            auto f = juce::StringArray::fromTokens (spec, ",", "");
+            const double bpm = numberOr (f[0], "--transport bpm");
+            if (bpm <= 0.0) refuse ("--transport: bpm must be positive");
+            transportStart = f.size() > 1 ? numberOr (f[1], "--transport start") : 0.0;
+            playHead = std::make_unique<HarnessPlayHead> (bpm, transportStart, true);
+        }
+        processor->setPlayHead (playHead.get());
+    }
+
     // -------- MIDI and input
     std::vector<int> notes;
     for (auto n : juce::StringArray::fromTokens (args.get ("notes"), ",", ""))
@@ -603,6 +865,37 @@ static int run (int argc, char* argv[])
     else if (! isInstrument)
         signal.kind = "impulse";
 
+    // -------- A B see: the mix meter's readings (stand-in for oberli::Loudness)
+    if (args.has ("mix-reading") && args.has ("mix-meter"))
+        refuse ("--mix-reading and --mix-meter are two ways to say the same thing; pick one");
+    if (args.has ("mix-reading"))
+    {
+        auto f = juce::StringArray::fromTokens (args.get ("mix-reading"), ",", "");
+        absee::MixReading r;
+        r.valid = true;
+        r.integratedLufs = numberOr (f[0], "--mix-reading integrated");
+        r.shortLufs = f.size() > 1 ? numberOr (f[1], "--mix-reading short") : r.integratedLufs;
+        r.truePeakDb = f.size() > 2 ? numberOr (f[2], "--mix-reading true peak") : -400.0;
+        product->setMixAnalyser (std::make_unique<ScriptedMixAnalyser> (r));
+    }
+    else if (args.has ("mix-meter"))
+    {
+        if (args.get ("mix-meter") != "prepass") refuse ("--mix-meter: only `prepass` for now");
+        // Render the input signal on its own and measure it with the harness's own BS.1770
+        // path; a streaming meter converges to these numbers over the same material.
+        Signal pre = signal;
+        pre.rng.seed ((unsigned) seed);
+        juce::AudioBuffer<float> whole (2, (int) std::llround (seconds * rate));
+        pre.fill (whole, 0, rate);
+        const auto loud = measureLoudness (whole, rate);
+        absee::MixReading r;
+        r.valid = loud.integrated > -200.0;
+        r.integratedLufs = loud.integrated;
+        r.shortLufs = loud.integrated;
+        r.truePeakDb = dbOf (truePeak (whole));
+        product->setMixAnalyser (std::make_unique<ScriptedMixAnalyser> (r));
+    }
+
     // -------- mid-render events
     struct Reprepare { double t; double rate; int block; };
     std::vector<Reprepare> reprepares;
@@ -639,7 +932,12 @@ static int run (int argc, char* argv[])
     int midiFileIndex = 0;
     juce::int64 pos = 0;
     juce::int64 total = (juce::int64) std::llround (seconds * rate);
-    juce::AudioBuffer<float> work (2, maxBlock);
+    // Sized for the blocks the harness actually renders, not for the size it announced:
+    // `--block=1024 --max-block=256` is a deliberate test of a plugin being handed a block
+    // larger than it was prepared for (D.5.1), and the harness has to own that memory. Sizing
+    // it to maxBlock alone writes past the end of the buffer (seen as "malloc(): corrupted top
+    // size" on Linux; silent corruption elsewhere). Worth fixing in plugin-template.
+    juce::AudioBuffer<float> work (2, juce::jmax (maxBlock, randomBlocks ? maxBlock : block));
     juce::MidiBuffer midi;
 
     while (pos < total)
@@ -651,11 +949,24 @@ static int run (int argc, char* argv[])
             const double remaining = seconds - now;
             rate = r.rate; maxBlock = r.block; if (! randomBlocks) block = r.block;
             total = pos + (juce::int64) std::llround (remaining * rate);
-            work.setSize (2, maxBlock, false, false, true);
+            work.setSize (2, juce::jmax (maxBlock, randomBlocks ? maxBlock : block), false, false, true);
             processor->prepareToPlay (rate, maxBlock);   // no releaseResources: pluginval's non-releasing case
         }
         while (nextPreset < presetAts.size() && presetAts[nextPreset].t <= now)
             loadPreset (apvts, presetAts[nextPreset++].slug);
+
+        // Between blocks, never inside one: this is the message thread's work in the plugin
+        // (oberli::References decoding and publishing, D.1.4 pattern B).
+        if (referencesLoaded > 0)
+        {
+            republishActiveSlot();
+            // The residency rule is about what is resident *while playing*; by the time the
+            // JSON is written `releaseResources` has freed everything, so it is sampled here.
+            maxResident = juce::jmax (maxResident, product->referenceStore().residentCount());
+            maxRetired = juce::jmax (maxRetired, product->referenceStore().retiredCount());
+        }
+        if (playHead != nullptr)
+            playHead->advanceTo (transportStart + now, rate);
 
         int n = randomBlocks ? (int) (blockRng() % (unsigned) (maxBlock + 1)) : block;
         n = (int) juce::jmin ((juce::int64) n, total - pos);
@@ -715,6 +1026,7 @@ static int run (int argc, char* argv[])
         pos += n;
     }
     processor->releaseResources();
+    processor->setPlayHead (nullptr);   // the harness owns the clock; do not outlive it
 
     // -------- state out
     if (args.has ("state-out"))
@@ -766,7 +1078,12 @@ static int run (int argc, char* argv[])
     set (root, "contract", 3);
     {
         auto applied = obj();
-        set (applied, "seed", seed); set (applied, "sample_rate", rate); set (applied, "block", randomBlocks ? juce::var (blockArg) : juce::var (block));
+        set (applied, "seed", seed);
+        // The contract's example prints an integral rate as an integer ("sample_rate": 48000),
+        // and `dspkit.assert_echo` compares the echo as text, so 48000.0 would fail every
+        // rule-13 check for a test that asked for 48000. Echo it the way it was asked.
+        set (applied, "sample_rate", std::floor (rate) == rate ? juce::var ((int) rate) : juce::var (rate));
+        set (applied, "block", randomBlocks ? juce::var (blockArg) : juce::var (block));
         set (applied, "max_block", maxBlock); set (applied, "seconds", seconds);
         set (applied, "preset", presetName.isEmpty() ? juce::var() : juce::var (presetName)); set (applied, "solo", solo.isEmpty() ? juce::var() : juce::var (solo));
         auto params = obj();
@@ -777,6 +1094,12 @@ static int run (int argc, char* argv[])
         juce::var noteList; for (int n : notes) noteList.append (n);
         set (applied, "notes", noteList); set (applied, "gate", gate >= 0.0 ? juce::var (gate) : juce::var());
         set (applied, "latency_samples", processor->getLatencySamples()); set (applied, "tail_seconds", tail);
+        // rule 13, A B see's own state: a dropped or misspelled flag shows up here
+        set (applied, "nonrealtime", nonRealtime);
+        set (applied, "references", referencesLoaded);
+        set (applied, "transport", args.has ("transport") ? juce::var (args.get ("transport")) : juce::var());
+        set (applied, "mix_reading", args.has ("mix-reading") ? juce::var (args.get ("mix-reading"))
+                                   : (args.has ("mix-meter") ? juce::var (args.get ("mix-meter")) : juce::var()));
         auto build = obj();
         set (build, "commit", BUILD_SHA);
        #if JUCE_DEBUG
@@ -814,7 +1137,7 @@ static int run (int argc, char* argv[])
         set (pr, "first_block_pct", firstBlockPct); set (pr, "warmup_blocks", warmup);
         set (root, "profile", pr);
     }
-    set (root, "product", productMetrics (out, rate));
+    set (root, "product", productMetrics (*product, out, rate, maxResident, maxRetired));
     std::cout << juce::JSON::toString (root, true) << std::endl;
 
     if (stateRefused.isNotEmpty()) { std::cerr << "error: --state-in " << stateRefused << std::endl; return 2; }
