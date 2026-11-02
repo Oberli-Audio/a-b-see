@@ -57,8 +57,8 @@ Tier P, track A (analysis; stages processing, output, analysis), at G4 closed, G
 | G2 | closed 2026-11-01 | `sound design/prototype/absee_proto.py` (numpy, track A: analysis prototypes are numpy, not Faust - F.15.1), one class per C++ module; `python3 "sound design/prototype/absee_proto.py" --demo` -> 4 renders, checked programmatically at G3, **not heard yet** |
 | G3 | prototype side closed 2026-11-01, plugin side open | `python3 "sound design/prototype/proto_measure.py" --all` -> 10/10 pass, numbers in the metric table below (JSON: `sound design/prototype/g3-prototype.json`) |
 | G4 | closed 2026-11-01 | `cmake --preset release -G Ninja && cmake --build --preset release` -> clean, no warnings in `Source/**`; one module per prototype class, the two shared modules behind seams (`MixAnalysis.h`, `ReferenceStore.h`) |
-| G5 | part-closed 2026-11-01 | `test_plugin_matches_the_prototype` -> residual **-108.9 dBFS** after the switch has settled (threshold -90; the first 10 ms are the port's fade-in from Mix and are excluded, measured -32.7 dBFS there). Defining features by name: `test_render_is_always_the_wire` (bit-exact), `test_match_readout_says_what_it_did`. **Open:** the match against a real streaming meter, and feature 3 (band deltas) |
-| G6 | part-closed 2026-11-01, rest blocked | `ctest --preset all` -> **5/5 pass** (fast 47 s, render 65 s); `paramgen.py check --list-params --manual docs/parameters.md` -> OK, 11 parameters, round trip at 101 points; `presetlint.py bank --tier P --track effect` -> OK, 9 presets, matches the harness. **Blocked on macOS:** `validate_plugin.py full` (pluginval, Steinberg validator), the malloc trap / RTSan, `perf.py`, `paramgen.py check --frozen` (no release yet). Hosts: Live 10.1 Rosetta -, Live Windows - |
+| G5 | part-closed 2026-11-02 | `test_plugin_matches_the_prototype` -> residual **-108.9 dBFS** after the switch has settled (threshold -90; the first 10 ms are the port's fade-in from Mix and are excluded, measured -32.7 dBFS there; Linux run, passes on macOS arm64). Defining features by name: `test_render_is_always_the_wire` (bit-exact), `test_match_readout_says_what_it_did`, and since 2026-11-02 `test_live_match_lands_within_the_brief` (the shared meter live, numbers in the live-match table below). **Open:** feature 3 (band deltas, `Analysis` has landed) and the plugin's own reference loader (the harness loads through `oberli::references::load`, the plugin has no caller yet) |
+| G6 | part-closed 2026-11-02, rest next | `ctest --preset all` -> **10/10 pass** on macOS arm64 (suite fast 12 s, render 18 s, `bounce_null`, the three shared-code tests, three lints); `paramgen.py check --list-params --manual docs/parameters.md` -> OK, 11 parameters, round trip at 101 points; `presetlint.py bank --tier P --track effect` -> OK, 9 presets, matches the harness. **Next on this Mac:** `validate_plugin.py full` (pluginval, Steinberg validator), the malloc trap / RTSan, `perf.py`, the golden re-render; `paramgen.py check --frozen` (no release yet). Hosts: Live 10.1 Rosetta -, Live Windows - |
 | G7 | - | - |
 
 ## Metric table (G3, prototype; build Linux/x86_64, commit at the time of the run)
@@ -82,6 +82,24 @@ The Integrated match error is bounded by the 0.1 LU hysteresis by construction (
 the gain only moves when the reading moves by more than 0.1 LU), so 0.070 LU is the
 hysteresis band, not noise. Short 3 s has no hysteresis and reads 0.030 LU.
 
+## Live match (G5, plugin, shared meter; macOS arm64, 2026-11-02)
+`test_live_match_lands_within_the_brief`: 12 s of the harness's pink mix (-20 dBFS), the
+`quiet` test reference 6 dB below it, Section Whole, no `--mix-reading` (echo `live`). The
+rendered reference over one full 4 s loop from 8 s on, against the mix, measured by the kit's
+numpy BS.1770 and 4x true peak (independent of the C++ meter). The numbers below are from a
+scratch run of the same renders and windows; the test asserts them, it does not print them.
+
+| Mode | Target | Measured | Gain, readout |
+|---|---|---|---|
+| Integrated | +/-0.1 LU | +0.057 LU (against the mix since the start) | +6.07 dB, "Reference +6.1 dB" |
+| Short 3 s | +/-0.1 LU | +0.003 LU (same 4 s window) | +6.01 dB, "Reference +6.0 dB" |
+| True peak | +/-0.1 dB | -0.084 dB | +5.80 dB, "Reference +5.8 dB" |
+
+Integrated sits inside the 0.1 LU hysteresis band, as on the prototype (0.070). True peak
+uses 0.084 of its 0.1 dB, most of it the disagreement between two true-peak estimators (the
+meter's 48-tap interpolator, the kit's 4x resampler); seeded, so it is the same number on
+every run of this slice.
+
 ## Rule 13: every presence test shown failing on the build with its defect (D.3.8)
 Two scratch builds in the working tree (restored afterwards; `git status` clean, `ctest
 --preset all` 5/5 again). Each defect is one line; the tests are grouped so that no defect in
@@ -97,6 +115,8 @@ a build can explain another's failure.
 | B | `player.setAlign(0, 0)` | `test_align_pair_shifts_the_reference` | "0.0 != 0.5 within 0.002 delta" |
 | B | no eviction in `ReferenceStore::setActive` | `test_at_most_two_references_are_resident` | "3 not less than or equal to 2" |
 | B | the blind draw constant | `test_blind_assignment_is_seeded` | "Items in the second set but not the first: True" |
+| C (2026-11-02) | the processor built with `NoMixAnalyser` | `test_live_match_lands_within_the_brief` | "integrated match off by -6.015 (gain 0.00 dB, readout 'Reference +0.0 dB')" |
+| C (2026-11-02) | `buildReferenceBuffer` labels the buffer with the file's rate | `test_reference_at_another_rate_is_resampled_on_load` | "False is not true" (the player saw a rate mismatch and stayed silent) |
 
 `test_plugin_matches_the_prototype` also failed in build B, as it must: the trim offset is a
 real difference from the prototype. The remaining tests are contract and health checks, which
@@ -110,19 +130,27 @@ guard defects the harness itself reports (NaN, latency, state) rather than a fea
 - none yet.
 
 ## Handoff
-Task: build A B see from G1 to a validated Tier P plugin, shared modules aside.
+Task: build A B see from G1 to a validated Tier P plugin.
 Plan: 1. [x] G1 decisions 2. [x] G2 numpy prototype 3. [x] G3 measure the prototype (10/10)
-4. [x] G4 port to C++ with the seams and the harness hooks 5. [x] test suite (fast 16 tests
-/ 50 s, render 15 tests / 70 s) 6. [x] preset bank (9, lint green) 7. [x] G5 null against the
-prototype 8. [x] one committed golden 9. [x] every presence test proven on a planted-defect
-build (table above) 10. [ ] **paused here 2026-11-01 at Björn's request; the work continues in
-a Visual Studio Code session on his Mac: `docs/continue.md` is the prompt to paste** 11. [ ] the
-editor, when `Source/oberli/` lands (plugin-ui-bob) 12. [ ] README, CHANGELOG, notices
-(ship-bob) 13. [ ] on the Mac: validators, malloc trap / RTSan, the perf row, the two hosts.
-Working tree: clean. Build: green (Linux/x86_64, GCC 13 - **not** a slice that ships).
-Tests: `ctest --preset all` -> 5/5 (fast 50 s, render 70 s, three lints).
+4. [x] G4 port to C++ with the seams and the harness hooks 5. [x] test suite 6. [x] preset
+bank (9, lint green) 7. [x] G5 null against the prototype 8. [x] one committed golden 9. [x]
+every presence test proven on a planted-defect build 10. [x] on the Mac: `Source/oberli/`
+refreshed, release build and `ctest --preset all` green 11. [x] the live meter and the shared
+reference loader wired, proven (builds C) 12. [ ] G6 on the Mac: malloc trap self-test, RTSan
+build, `perf.py`, `validate_plugin.py full`, golden re-rendered on arm64 13. [ ] the plugin's
+reference loader (worker thread: `oberli::references::load` + `buildReferenceBuffer` ->
+`ReferenceStore::publish`, slot switch -> `setActive`), so a restored project plays its
+references 14. [ ] feature 3, band deltas, on `oberli::Analysis` 15. [ ] the editor
+(plugin-ui-bob) 16. [ ] README, CHANGELOG (ship-bob) 17. [ ] the two Ableton host checks and
+the listening checkpoint (Björn).
+Working tree: clean after the checkpoint commit. Build: green on macOS (universal, LTO), no
+warnings in `Source/` or `tools/`.
+Tests: `ctest --preset all` -> 10/10.
+Python: CMake must find a python3 with numpy and scipy, or the suite is silently not
+registered. On this Mac it found Homebrew's 3.12 (no numpy) first; configured with
+`-DPython3_EXECUTABLE=/usr/bin/python3` (cached in `build/`).
 Open questions for the owner: the Waiting-for-Björn lines above.
-Next command: `cmake --preset release && cmake --build --preset release && ctest --preset all`
+Next command: `PRODUCT_MALLOC_TRAP_SELFTEST=1 ./build/ABSeeHarness_artefacts/Release/ABSeeHarness --signal=impulse`
 
 The prototype's renders are **not** committed: `.gitignore` keeps WAVs out of this repo
 (project policy, CLAUDE.md) and the renders are reproducible in one seeded command
@@ -130,6 +158,15 @@ The prototype's renders are **not** committed: `.gitignore` keeps WAVs out of th
 measurement script and `g3-prototype.json`.
 
 ## Decisions
+- 2026-11-02: **One meter, one reference path, in the plugin and in the harness.** The
+  harness's own BS.1770 copy no longer analyses references or the `prepass` mix reading: both
+  go through `oberli::Loudness`, and references through `oberli::references::load` (resampled
+  on load, so the harness's "wrong rate is refused" rule is gone) and
+  `absee::buildReferenceBuffer` (`Source/ReferenceSections.*`: Whole, the four marker
+  sections, Loudest 10 s on a 0.5 s grid, the prototype's search). The harness keeps its own
+  copy only for the generic output metrics of its JSON (`loudness`), which are the
+  instrument, not the product. `--mix-reading` and `--mix-meter=prepass` stay as test hooks
+  that pin the reading; without them the live meter runs (echo `mix_reading: live`).
 - 2026-11-01: **G1 family.** A B see is track A: the product is two measurements and a
   switch, not a processor. Per `dsp-selection` S.4 the loudness meter is BS.1770-5 with
   K-weighting **redesigned per rate** (reusing the 48 kHz table reads 0.68 dB low on pink

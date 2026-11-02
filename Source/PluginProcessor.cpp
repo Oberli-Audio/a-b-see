@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "LoudnessMixAnalyser.h"
 
 #include <cmath>
 
@@ -52,9 +53,8 @@ ABSeeAudioProcessor::ABSeeAudioProcessor()
     matchTargetParam = rawParam (apvts, Params::matchTarget);
     bypassParam = rawParam (apvts, Params::bypassParameterId);
 
-    // Until Source/oberli/Loudness lands the plugin measures nothing and says so
-    // (MixAnalysis.h); the match gain then stays at 0.0 dB in every mode.
-    mixAnalyser = std::make_unique<absee::NoMixAnalyser>();
+    // The mix meter: the shared oberli::Loudness behind the MixAnalysis.h seam (rule 17)
+    mixAnalyser = std::make_unique<absee::LoudnessMixAnalyser>();
     blind.setSeed (1);
     setLatencySamples (0);   // brief: 0 samples in every mode (rule 7, asserted in a test)
 }

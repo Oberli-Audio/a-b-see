@@ -88,6 +88,8 @@ class Material:
         n = int(REF_SECONDS * fs)
         cls.quiet = cls.dir / "quiet.wav"          # 6 dB below the harness's pink mix
         K.write_wav(cls.quiet, P.pink(n, fs, -26.0, seed=2).astype(np.float32), fs)
+        cls.quiet44 = cls.dir / "quiet44.wav"      # the same, at 44.1 kHz: resampled on load
+        K.write_wav(cls.quiet44, P.pink(int(REF_SECONDS * 44100), 44100, -26.0, seed=2).astype(np.float32), 44100)
         cls.other = cls.dir / "other.wav"
         K.write_wav(cls.other, P.pink(n, fs, -26.0, seed=3).astype(np.float32), fs)
         cls.third = cls.dir / "third.wav"
@@ -193,6 +195,17 @@ class RateAndBlock(Timed):
         self.assertTrue(res["product"]["reference"]["rate_mismatch"])
         self.assertFalse(res["product"]["reference"]["playing"])
         self.assertEqual(res["health"]["nan"] + res["health"]["inf"], 0)
+
+
+    def test_reference_at_another_rate_is_resampled_on_load(self):  # oberli::references::load
+        """A 44.1 kHz file in a 48 kHz session plays, at its own loudness: References resamples
+        on load (windowed sinc), so the player never sees a rate mismatch."""
+        res = run({"listen": LISTEN["reference"], "matchMode": MATCH["off"], "section": SECTION["whole"],
+                   "followTransport": 0.0}, reference=str(Material.quiet44), seconds=REF_SECONDS)
+        self.assertTrue(res["product"]["reference"]["playing"])
+        self.assertFalse(res["product"]["reference"]["rate_mismatch"])
+        source, fs = K.read_wav(Material.quiet44)
+        self.assertAlmostEqual(res["loudness"]["integrated_lufs"], K.integrated_lufs(source, fs), delta=0.1)
 
 
 class Health(Timed):
@@ -371,6 +384,35 @@ class BriefAcceptance(Timed):
     """The brief's own acceptance tests (sketch 6), on the plugin."""
 
     label = "render"
+
+    def test_live_match_lands_within_the_brief(self):
+        """brief must_do: the reference matched to the mix within 0.1 LU (Integrated, Short 3 s)
+        or 0.1 dB (True peak), by the plugin's own live meter (oberli::Loudness, no
+        --mix-reading). Judged on the rendered audio by the kit's independent BS.1770 and 4x
+        true peak, after the meter's 3 s window and the 20 ms smoother have settled: the
+        reference over one full 4 s loop against the mix so far."""
+        fs, seconds, settle = 48000, 12.0, 8.0
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            run({"listen": LISTEN["mix"]}, seconds=seconds, out=d / "mix.wav")
+            mix, _ = K.read_wav(d / "mix.wav")
+            a, b = int(settle * fs), int((settle + REF_SECONDS) * fs)
+            for name, tolerance in (("integrated", 0.1), ("short", 0.1), ("truepeak", 0.1)):
+                res = run({"listen": LISTEN["reference"], "matchMode": MATCH[name],
+                           "section": SECTION["whole"], "followTransport": 0.0},
+                          reference=str(Material.quiet), seconds=seconds, out=d / ("%s.wav" % name))
+                self.assertEqual(res["applied"]["mix_reading"], "live", "the live meter did not run")
+                out, _ = K.read_wav(d / ("%s.wav" % name))
+                if name == "truepeak":
+                    error = K.true_peak_dbtp(out[a:b], fs) - K.true_peak_dbtp(mix[:b], fs)
+                elif name == "short":
+                    error = K.integrated_lufs(out[a:b], fs) - K.integrated_lufs(mix[a:b], fs)
+                else:
+                    error = K.integrated_lufs(out[a:b], fs) - K.integrated_lufs(mix[:b], fs)
+                self.assertLess(abs(error), tolerance,
+                                "%s match off by %+.3f (gain %.2f dB, readout %r)"
+                                % (name, error, res["product"]["match"]["reference_gain_db"],
+                                   res["product"]["match"]["readout"]))
 
     def test_switch_does_not_overshoot(self):
         """brief quality_targets: a 1 kHz sine on both sides, 200 switches, no sample above

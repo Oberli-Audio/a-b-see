@@ -123,7 +123,10 @@ set(PRODUCT_SOURCES
     Source/Crossfade.h
     Source/MatchEngine.h
     Source/MixAnalysis.h
+    Source/LoudnessMixAnalyser.h
     Source/ReferencePlayer.h
+    Source/ReferenceSections.cpp
+    Source/ReferenceSections.h
     Source/ReferenceStore.h
     Source/RenderSafety.h)
 

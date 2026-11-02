@@ -84,9 +84,9 @@ public:
         return extra.slots[(size_t) juce::jlimit (0, absee::kNumSlots - 1, index)];
     }
 
-    /** Hands the processor its loudness meter. Until `Source/oberli/Loudness` lands the
-        processor is constructed with `absee::NoMixAnalyser` and the match gain stays at
-        0.0 dB; the harness injects a scripted one so the match policy can be measured. */
+    /** Replaces the processor's loudness meter (by default `absee::LoudnessMixAnalyser`, the
+        shared `oberli::Loudness`); the harness injects fixed readings so the match policy can
+        be measured without the meter's warm-up. nullptr means `NoMixAnalyser`. */
     void setMixAnalyser (std::unique_ptr<absee::MixAnalyser> analyser);
 
     absee::RenderSafety& renderSafety() noexcept { return safety; }

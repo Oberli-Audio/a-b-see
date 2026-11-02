@@ -16,7 +16,7 @@ const Theme theme = kBone ? Theme { juce::Colour (0xFFF3EEE4), juce::Colour (0xF
 } // namespace
 
 ABSeeAudioProcessorEditor::ABSeeAudioProcessorEditor (ABSeeAudioProcessor& p)
-    : AudioProcessorEditor (&p), processor (p)
+    : AudioProcessorEditor (&p), product (p)
 {
     setWantsKeyboardFocus (false);   // the space bar keeps reaching the host's transport
     title.setText (JucePlugin_Name, juce::dontSendNotification);
@@ -29,7 +29,7 @@ ABSeeAudioProcessorEditor::ABSeeAudioProcessorEditor (ABSeeAudioProcessor& p)
     version.setJustificationType (juce::Justification::centredRight);
     addAndMakeVisible (version);
 
-    for (auto* param : processor.getParameters())
+    for (auto* param : product.getParameters())
     {
         auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (param);
         if (ranged == nullptr)
@@ -48,7 +48,7 @@ ABSeeAudioProcessorEditor::ABSeeAudioProcessorEditor (ABSeeAudioProcessor& p)
         c->label.setText (ranged->getName (32), juce::dontSendNotification);
         c->label.setJustificationType (juce::Justification::centred);
         c->label.setColour (juce::Label::textColourId, theme.ink);
-        c->attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.parameters(), ranged->paramID, c->slider);
+        c->attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (product.parameters(), ranged->paramID, c->slider);
         addAndMakeVisible (c->slider);
         addAndMakeVisible (c->label);
         controls.push_back (std::move (c));

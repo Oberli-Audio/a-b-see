@@ -21,7 +21,7 @@ public:
     void resized() override;
 
 private:
-    ABSeeAudioProcessor& processor;
+    ABSeeAudioProcessor& product;
     juce::TooltipWindow tooltips { this, 500 };
     struct Control
     {

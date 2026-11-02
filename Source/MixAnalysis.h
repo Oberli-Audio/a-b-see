@@ -19,9 +19,9 @@
       - `MixAnalyser::process` runs on the audio thread, so it must do the few multiplies
         per sample of the K-weighting and the 100 ms sub-block accumulation, and nothing
         else: gating, percentiles and the display run off-thread (A.9 G1).
-      - until the shared module lands the processor holds `NoMixAnalyser`, which reads
-        "no measurement"; the match gain then stays at 0.0 dB on both sides and the readout
-        says so. That is a *visible* gap, not a silent wrong number.
+      - the processor holds `LoudnessMixAnalyser` (the shared meter, LoudnessMixAnalyser.h);
+        `NoMixAnalyser` reads "no measurement", so with it the match gain stays at 0.0 dB on
+        both sides and the readout says so - a *visible* gap, not a silent wrong number.
 */
 namespace absee
 {
@@ -55,10 +55,9 @@ public:
     virtual MixReading read() const noexcept = 0;
 };
 
-/** The stand-in until `Source/oberli/Loudness` lands: it measures nothing and says so.
-    With it the match gain is 0.0 dB in every mode - the plugin switches, loops, follows the
-    transport and stays a wire on render, but it does not level-match. docs/status.md carries
-    that as a Waiting-for-Björn line. */
+/** The meter that measures nothing and says so (`setMixAnalyser (nullptr)`). With it the
+    match gain is 0.0 dB in every mode - the plugin switches, loops, follows the transport
+    and stays a wire on render, but it does not level-match. */
 class NoMixAnalyser final : public MixAnalyser
 {
 public:

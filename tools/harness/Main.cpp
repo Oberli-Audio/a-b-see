@@ -18,6 +18,8 @@
 #include <juce_dsp/juce_dsp.h>
 
 #include "PluginProcessor.h"
+#include "ReferenceSections.h"
+#include "oberli/Loudness.h"
 #include "State.h"
 #include "BuildInfo.h"
 
@@ -162,23 +164,21 @@ const char* const kUsage =
     "  --solo=<part>                mix | reference: snap the Listen switch to that side\n"
     "  --list-params | --list-presets   JSON lists; exit\n"
     "\n"
-    "A B see's own flags. They stand in for the two shared modules that have not landed yet\n"
-    "(docs/status.md, Waiting for Björn), so the DSP around them can be measured today; each\n"
-    "one is the exact call the shared module will make.\n"
+    "A B see's own flags. Each one makes the call the plugin's own code makes (the reference\n"
+    "loader, the host clock, the meter), so the DSP around them can be measured offline.\n"
     "  --non-realtime               render as the host's offline export does (isNonRealtime):\n"
     "                               the plugin must be the wire (defining feature 1)\n"
-    "  --reference=<file.wav>       fill the next reference slot, 1 to 8, in order. Stands in\n"
-    "                               for oberli::References: the harness decodes, analyses each\n"
-    "                               section with its own BS.1770 path and publishes the buffer.\n"
-    "                               A file whose rate differs from --sample-rate is refused\n"
-    "                               (References resamples on load; the harness does not)\n"
+    "  --reference=<file>           fill the next reference slot, 1 to 8, in order: decoded and\n"
+    "                               resampled to --sample-rate by oberli::references::load, each\n"
+    "                               section measured by oberli::Loudness (ReferenceSections.h)\n"
     "  --marks=<slot>,<n>,<in>,<out>   section n (1-4) of slot (1-8), in seconds; repeatable\n"
     "  --align=<slot>,<daw>,<ref>   the \"Align here\" pair of a slot, in seconds\n"
     "  --transport=<bpm>[,<start>]  a playing host clock from <start> seconds; --transport=stopped\n"
     "                               gives a stopped one. Without it there is no playhead at all\n"
-    "  --mix-reading=<i>[,<s>[,<tp>]]   inject the mix meter's readings (LUFS, LUFS, dBTP)\n"
-    "  --mix-meter=prepass          measure the input signal with the harness's own BS.1770\n"
-    "                               path and inject that as the mix reading\n"
+    "  --mix-reading=<i>[,<s>[,<tp>]]   replace the live mix meter with fixed readings (LUFS, LUFS, dBTP)\n"
+    "  --mix-meter=prepass          replace it with oberli::Loudness over the whole input,\n"
+    "                               fixed from the first sample (no warm-up). Neither flag: the\n"
+    "                               plugin's live meter\n"
     "  --safe-on-render=0|1         the \"Safe on render\" menu item (default 1)\n";
 
 struct Args
@@ -204,7 +204,7 @@ Args parseArgs (int argc, char* argv[])
     static const juce::StringArray known { "help", "seed", "sample-rate", "block", "max-block", "seconds", "preset", "param",
         "automate", "bend", "mod", "notes", "midi", "gate", "reprepare-at", "in", "signal", "out", "state-in", "state-out",
         "profile", "preset-at", "warmup", "solo", "list-params", "list-presets",
-        // A B see's own flags (--help says what each one stands in for)
+        // A B see's own flags (--help says what each one does)
         "non-realtime", "reference", "marks", "align", "transport", "mix-reading", "mix-meter", "safe-on-render" };
     Args a;
     for (int i = 1; i < argc; ++i)
@@ -459,15 +459,14 @@ double dbOf (double lin) { return lin > 0.0 ? 20.0 * std::log10 (lin) : -300.0; 
 } // namespace
 
 //==============================================================================
-// A B see's stand-ins for the two shared modules (docs/status.md, Waiting for Björn). Each one
-// does exactly what the shared module will do and nothing more, so the tests written against
-// them keep passing when the real thing lands.
+// A B see's harness hooks: scripted meter readings, a host clock and the reference loader.
 namespace
 {
-/** Stands in for `oberli::Loudness`: constant readings, injected by `--mix-reading` or
-    measured from the input signal by `--mix-meter=prepass`. It is **not** a meter - it does
-    not integrate, gate or follow the audio - which is why it lives in the harness and not in
-    `Source/`. What it makes measurable today is the match *policy* (MatchEngine). */
+/** Replaces the plugin's live meter (`oberli::Loudness` behind `LoudnessMixAnalyser`) with
+    constant readings, injected by `--mix-reading` or measured over the whole input by
+    `--mix-meter=prepass`. It is **not** a meter - it does not integrate, gate or follow the
+    audio - which is why it lives in the harness: it isolates the match *policy* (MatchEngine)
+    from the meter's 3 s and gating warm-up. Without either flag the live meter runs. */
 class ScriptedMixAnalyser final : public absee::MixAnalyser
 {
 public:
@@ -508,78 +507,20 @@ private:
     bool isPlaying = true;
 };
 
-/** Stands in for `oberli::References`: decode (here: read a WAV at the session rate), analyse
-    every section off the audio thread, and hand the buffer to the store. The analysis uses the
-    harness's own BS.1770 path above, the same one every other measurement in this file uses. */
+/** What `oberli::References` and A B see do when a reference is chosen: decode and resample
+    to the session rate (`oberli::references::load`), then measure every section with the
+    shared meter (`absee::buildReferenceBuffer`). The plugin's own loader makes the same two
+    calls, so the harness renders exactly the buffer the plugin would play. */
 std::unique_ptr<absee::ReferenceBuffer> buildReference (const juce::File& file, double rate,
                                                         const absee::SlotState& slot, juce::String& error)
 {
-    juce::AudioFormatManager fm;
-    fm.registerBasicFormats();
-    std::unique_ptr<juce::AudioFormatReader> reader (fm.createReaderFor (file));
-    if (reader == nullptr)
+    auto track = oberli::references::load (file, rate, error);
+    if (track == nullptr)
     {
-        error = "cannot read " + file.getFullPathName();
+        error = file.getFileName() + ": " + error;
         return {};
     }
-    if (std::abs (reader->sampleRate - rate) > 0.5)
-    {
-        error = file.getFileName() + " is at " + juce::String (reader->sampleRate, 0)
-              + " Hz, the session is at " + juce::String (rate, 0)
-              + " Hz (oberli::References resamples on load; the harness does not)";
-        return {};
-    }
-    auto buffer = std::make_unique<absee::ReferenceBuffer>();
-    buffer->sampleRate = rate;
-    buffer->name = file.getFileNameWithoutExtension();
-    buffer->audio.setSize ((int) juce::jmin ((unsigned) 2, reader->numChannels), (int) reader->lengthInSamples);
-    reader->read (&buffer->audio, 0, (int) reader->lengthInSamples, 0, true, true);
-
-    const int total = buffer->audio.getNumSamples();
-    const double length = (double) total / rate;
-    const auto analyse = [&] (double inSeconds, double outSeconds) -> absee::SectionAnalysis
-    {
-        absee::SectionAnalysis s;
-        s.inSeconds = juce::jlimit (0.0, length, inSeconds);
-        s.outSeconds = juce::jlimit (s.inSeconds, length, outSeconds);
-        const int from = (int) std::llround (s.inSeconds * rate);
-        const int n = juce::jmin (total - from, (int) std::llround ((s.outSeconds - s.inSeconds) * rate));
-        if (n <= 0)
-            return s;
-        juce::AudioBuffer<float> slice (const_cast<float* const*> (buffer->audio.getArrayOfReadPointers()),
-                                        buffer->audio.getNumChannels(), from, n);
-        s.integratedLufs = measureLoudness (slice, rate).integrated;
-        s.truePeakDb = dbOf (truePeak (slice));
-        return s;
-    };
-
-    buffer->sections[0] = analyse (0.0, length);                       // Whole
-    for (int m = 0; m < 4; ++m)                                        // the user's markers
-    {
-        const double in = slot.marks[(size_t) (m * 2)], out = slot.marks[(size_t) (m * 2 + 1)];
-        buffer->sections[(size_t) (1 + m)] = out > in ? analyse (in, out) : absee::SectionAnalysis {};
-    }
-    {   // Loudest 10 s: the 10 s window with the highest short-term loudness, found on load
-        const double window = juce::jmin (10.0, length);
-        double bestStart = 0.0, best = -400.0;
-        for (double start = 0.0; start + window <= length + 1.0e-9; start += 0.5)
-        {
-            const int from = (int) std::llround (start * rate);
-            const int n = juce::jmin (total - from, (int) std::llround (window * rate));
-            if (n <= 0)
-                break;
-            juce::AudioBuffer<float> slice (const_cast<float* const*> (buffer->audio.getArrayOfReadPointers()),
-                                            buffer->audio.getNumChannels(), from, n);
-            const double l = measureLoudness (slice, rate).integrated;
-            if (l > best)
-            {
-                best = l;
-                bestStart = start;
-            }
-        }
-        buffer->sections[5] = analyse (bestStart, bestStart + window);
-    }
-    return buffer;
+    return absee::buildReferenceBuffer (std::move (*track), slot);
 }
 } // namespace
 
@@ -865,7 +806,7 @@ static int run (int argc, char* argv[])
     else if (! isInstrument)
         signal.kind = "impulse";
 
-    // -------- A B see: the mix meter's readings (stand-in for oberli::Loudness)
+    // -------- A B see: fixed mix meter readings instead of the live meter
     if (args.has ("mix-reading") && args.has ("mix-meter"))
         refuse ("--mix-reading and --mix-meter are two ways to say the same thing; pick one");
     if (args.has ("mix-reading"))
@@ -881,18 +822,21 @@ static int run (int argc, char* argv[])
     else if (args.has ("mix-meter"))
     {
         if (args.get ("mix-meter") != "prepass") refuse ("--mix-meter: only `prepass` for now");
-        // Render the input signal on its own and measure it with the harness's own BS.1770
-        // path; a streaming meter converges to these numbers over the same material.
+        // Render the input signal on its own and measure all of it with the shared meter: the
+        // reading the live meter converges to, available from the first sample on.
         Signal pre = signal;
         pre.rng.seed ((unsigned) seed);
         juce::AudioBuffer<float> whole (2, (int) std::llround (seconds * rate));
         pre.fill (whole, 0, rate);
-        const auto loud = measureLoudness (whole, rate);
+        oberli::Loudness meter;
+        meter.prepare (rate, 2);
+        meter.process (whole.getArrayOfReadPointers(), 2, whole.getNumSamples());
+        const auto loud = meter.readings();
         absee::MixReading r;
-        r.valid = loud.integrated > -200.0;
+        r.valid = loud.integrated > oberli::Loudness::kSilence;
         r.integratedLufs = loud.integrated;
         r.shortLufs = loud.integrated;
-        r.truePeakDb = dbOf (truePeak (whole));
+        r.truePeakDb = loud.truePeak;
         product->setMixAnalyser (std::make_unique<ScriptedMixAnalyser> (r));
     }
 
@@ -1041,7 +985,10 @@ static int run (int argc, char* argv[])
         auto file = juce::File::getCurrentWorkingDirectory().getChildFile (args.get ("out"));
         file.deleteFile();
         juce::WavAudioFormat wav;
-        std::unique_ptr<juce::AudioFormatWriter> writer (wav.createWriterFor (new juce::FileOutputStream (file), rate, 2, 32, {}, 0));
+        std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (file);
+        auto writer = wav.createWriterFor (stream, juce::AudioFormatWriterOptions{}.withSampleRate (rate).withNumChannels (2)
+                                                       .withBitsPerSample (32)
+                                                       .withSampleFormat (juce::AudioFormatWriterOptions::SampleFormat::floatingPoint));
         if (writer == nullptr || ! writer->writeFromAudioSampleBuffer (out, 0, out.getNumSamples())) refuse ("cannot write --out " + file.getFullPathName());
     }
 
@@ -1099,7 +1046,7 @@ static int run (int argc, char* argv[])
         set (applied, "references", referencesLoaded);
         set (applied, "transport", args.has ("transport") ? juce::var (args.get ("transport")) : juce::var());
         set (applied, "mix_reading", args.has ("mix-reading") ? juce::var (args.get ("mix-reading"))
-                                   : (args.has ("mix-meter") ? juce::var (args.get ("mix-meter")) : juce::var()));
+                                   : (args.has ("mix-meter") ? juce::var (args.get ("mix-meter")) : juce::var ("live")));
         auto build = obj();
         set (build, "commit", BUILD_SHA);
        #if JUCE_DEBUG
