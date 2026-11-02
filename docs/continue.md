@@ -68,7 +68,7 @@ missing needs this machine or the shared modules:
   brings them back, `python3 "sound design/prototype/absee_proto.py" --demo`, and they are what
   the listening checkpoint listens to.
 - **The harness has A B see's own flags** (`--reference`, `--marks`, `--align`, `--transport`,
-  `--mix-reading`, `--mix-meter=prepass`, `--nonrealtime`, `--safe-on-render`), documented in
+  `--mix-reading`, `--mix-meter=prepass`, `--non-realtime`, `--safe-on-render`), documented in
   `DEVELOPING.md` and in `--help`. Each one makes exactly the call the missing shared module
   will make, which is why the tests survive the swap.
 - **Three defects were found and fixed by the checks themselves**, and two template bugs were

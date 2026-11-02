@@ -165,7 +165,7 @@ const char* const kUsage =
     "A B see's own flags. They stand in for the two shared modules that have not landed yet\n"
     "(docs/status.md, Waiting for Björn), so the DSP around them can be measured today; each\n"
     "one is the exact call the shared module will make.\n"
-    "  --nonrealtime                render as the host's offline export does (isNonRealtime):\n"
+    "  --non-realtime               render as the host's offline export does (isNonRealtime):\n"
     "                               the plugin must be the wire (defining feature 1)\n"
     "  --reference=<file.wav>       fill the next reference slot, 1 to 8, in order. Stands in\n"
     "                               for oberli::References: the harness decodes, analyses each\n"
@@ -205,7 +205,7 @@ Args parseArgs (int argc, char* argv[])
         "automate", "bend", "mod", "notes", "midi", "gate", "reprepare-at", "in", "signal", "out", "state-in", "state-out",
         "profile", "preset-at", "warmup", "solo", "list-params", "list-presets",
         // A B see's own flags (--help says what each one stands in for)
-        "nonrealtime", "reference", "marks", "align", "transport", "mix-reading", "mix-meter", "safe-on-render" };
+        "non-realtime", "reference", "marks", "align", "transport", "mix-reading", "mix-meter", "safe-on-render" };
     Args a;
     for (int i = 1; i < argc; ++i)
     {
@@ -684,7 +684,7 @@ static int run (int argc, char* argv[])
     if (! isInstrument) layout.inputBuses.add (juce::AudioChannelSet::stereo());
     layout.outputBuses.add (juce::AudioChannelSet::stereo());
     if (! processor->setBusesLayout (layout)) refuse ("the processor refuses the stereo layout");
-    const bool nonRealtime = args.has ("nonrealtime");
+    const bool nonRealtime = args.has ("non-realtime");
     processor->setNonRealtime (nonRealtime);
     product->setRandomSeed ((juce::uint32) seed);                      // rule 8
     if (args.has ("safe-on-render"))
@@ -1095,7 +1095,7 @@ static int run (int argc, char* argv[])
         set (applied, "notes", noteList); set (applied, "gate", gate >= 0.0 ? juce::var (gate) : juce::var());
         set (applied, "latency_samples", processor->getLatencySamples()); set (applied, "tail_seconds", tail);
         // rule 13, A B see's own state: a dropped or misspelled flag shows up here
-        set (applied, "nonrealtime", nonRealtime);
+        set (applied, "non_realtime", nonRealtime);
         set (applied, "references", referencesLoaded);
         set (applied, "transport", args.has ("transport") ? juce::var (args.get ("transport")) : juce::var());
         set (applied, "mix_reading", args.has ("mix-reading") ? juce::var (args.get ("mix-reading"))

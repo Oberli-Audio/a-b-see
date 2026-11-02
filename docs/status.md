@@ -1,8 +1,21 @@
-# Status - A B see 0.1.0 (2026-11-01)
-Tier P, track A (analysis; stages processing, output, analysis), at G4 closed, G5 part-closed,
-G6 blocked on macOS. Recipe D.8.1.
+# Status - A B see 0.1.0 (2026-11-02)
+Tier P, track A (analysis; stages processing, output, analysis), at G4 closed, G5 part-closed
+(wiring the shared modules), G6 part-closed (macOS checks next). Recipe D.8.1.
 
 ## Waiting for Björn
+- 2026-11-02: **`refresh_oberli.py` put the harness's theme and accent inside a CMake comment.**
+  `wire_cmake` looks for the first `)` after `target_compile_definitions(<Id>Harness PRIVATE`,
+  and this repo's block has a comment with a parenthesis in it, so
+  `${PRODUCT_OBERLI_DEFINITIONS}` landed in the comment text. Moved by hand here; the fix
+  belongs in bob-skills (skip comment lines, or anchor on the closing line). Its harness step
+  also could not add `--non-realtime`, because this harness already had the flag as
+  `--nonrealtime`: renamed here to the family's spelling (echo `non_realtime`), so
+  `check_bounce.py` runs unchanged.
+- 2026-11-02: **Shared `Source/oberli/` has landed** (plugin-template `0e7d4f4`, bob-skills
+  `36ec34a`, 50 files, `refresh_oberli.py --check` green). The meter is `oberli::Loudness`,
+  which names BS.1770-4 where the G1 decision and `MixAnalysis.h` say -5; not checked here
+  whether the revision changes anything the tests measure.
+  Wiring it in behind `MixAnalysis.h` and `ReferenceStore.h` is the open G5 work now.
 - 2026-11-01: **`presetlint.py` cannot check Init for this product.** The kit's `check_init`
   compares a *choice* parameter's plain default with the harness's normalised echo, so it
   fails for any choice default but index 0 - here `section` (default Loudest 10 s, index 5).
@@ -16,15 +29,6 @@ G6 blocked on macOS. Recipe D.8.1.
   did not compile at all; (2) the harness sized its work buffer to `--max-block` while
   rendering blocks of `--block`, so the oversized-block test of its own scaffold wrote past
   the end of the buffer (`malloc(): corrupted top size`).
-- 2026-11-01: **Shared `Source/oberli/` is not in the repo yet.** A B see needs `Loudness`
-  (BS.1770-5 streaming meter: integrated, short-term 3 s, true peak 4x, per-rate K-weighting)
-  and `References` (decode, resample on load, the shared `Oberli Audio/References/` cache,
-  section markers, offline analysis per section); the editor also needs LookAndFeel, Strip
-  frame, meters and Analysis/FFT. Built here instead: the crossfade, the transport map, blind
-  mode, render safety and the match policy, each against a seam the shared module plugs into
-  (`Source/MixAnalysis.h`, `Source/ReferenceStore.h`). Until it lands the match gain stays
-  0.0 dB in Integrated / Short / True peak, so the brief's match-accuracy target cannot be
-  measured on the plugin (it is measured on the prototype at G3).
 - 2026-11-01: **The switch fades equal-gain, not equal-power as `must_do` says.** Your own
   acceptance test forced it: equal-power on a 1 kHz sine on both sides peaks **+3.0086 dB
   above the sine**, so a switch between two masters at -1 dBTP would clip the monitoring

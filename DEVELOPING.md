@@ -48,7 +48,7 @@ passing when `Source/oberli/` arrives. `--help` lists them all; the ones used mo
 
 ```bash
 $H --reference=ref.wav --param=listen=1 --param=matchMode=0 --mix-meter=prepass   # a matched A/B
-$H --reference=ref.wav --param=listen=1 --nonrealtime                              # must be the wire
+$H --reference=ref.wav --param=listen=1 --non-realtime                              # must be the wire
 $H --reference=ticks.wav --param=followTransport=1 --transport=120                 # the transport map
 $H --reference=ref.wav --marks=1,1,2.0,3.5 --param=section=0.2                     # section 1 of slot 1
 $H --reference=ref.wav --align=1,0.0,0.5 --transport=120                           # "Align here"

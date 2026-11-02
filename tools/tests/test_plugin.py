@@ -335,7 +335,7 @@ class DefiningFeatures(Timed):
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
             res = run(hostile, reference=str(Material.quiet), mix_meter="prepass",
-                      nonrealtime=1, out=d / "bounce.wav", seconds=3.0)
+                      non_realtime=1, out=d / "bounce.wav", seconds=3.0)
             run({"bypass": 1.0}, out=d / "removed.wav", seconds=3.0)
             bounce, _ = K.read_wav(d / "bounce.wav")
             removed, _ = K.read_wav(d / "removed.wav")
