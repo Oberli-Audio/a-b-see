@@ -2,10 +2,25 @@
 #include "PluginEditor.h"
 #include "LoudnessMixAnalyser.h"
 
+#include <ProductData.h>
+
 #include <cmath>
 
 namespace
 {
+/** A file compiled into the plugin (CMakeLists.txt: ProductData) by its name, or an empty block. */
+juce::MemoryBlock productFile (const juce::String& fileName)
+{
+    for (int i = 0; i < ProductData::namedResourceListSize; ++i)
+        if (fileName == ProductData::getNamedResourceOriginalFilename (ProductData::namedResourceList[i]))
+        {
+            int size = 0;
+            const auto* data = ProductData::getNamedResource (ProductData::namedResourceList[i], size);
+            return { data, (size_t) size };
+        }
+    return {};
+}
+
 std::atomic<float>* rawParam (juce::AudioProcessorValueTreeState& apvts, const char* id)
 {
     auto* p = apvts.getRawParameterValue (id);
@@ -55,6 +70,24 @@ ABSeeAudioProcessor::ABSeeAudioProcessor()
 
     // The mix meter: the shared oberli::Loudness behind the MixAnalysis.h seam (rule 17)
     mixAnalyser = std::make_unique<absee::LoudnessMixAnalyser>();
+    // The factory bank (presets.csv and presets/, compiled in) and the User folder, in the
+    // family's format (State.h); the Strip frame's header, drawer and menu work on it. A preset
+    // holds parameters only: the reference slots belong to the project, not to a preset.
+    presets = std::make_unique<oberli::PresetLibrary> (
+        productFile ("presets.csv").toString(), productFile,
+        [this] (const juce::String& name, const juce::String& category, const juce::String& description, bool factory)
+        {
+            return absee::State::presetXml (apvts, name, "", category, description, factory);
+        },
+        [this] (const juce::XmlElement& document)
+        {
+            auto* state = absee::State::stateOf (document);
+            return state != nullptr && absee::State::fromXml (*state, apvts);
+        });
+    // A new instance holds the parameter table's defaults: the Init preset, the bank's first.
+    if (! presets->factoryPresets().empty())
+        presets->restoreActive ("factory:" + presets->factoryPresets().front().slug);
+
     blind.setSeed (1);
     setLatencySamples (0);   // brief: 0 samples in every mode (rule 7, asserted in a test)
 }
@@ -90,6 +123,16 @@ void ABSeeAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     mixAnalyser->prepare (sampleRate, preparedBlockSize);
     loader.setSessionRate (sampleRate);   // a new rate reloads the references at it
     mixSpectrum.prepare (sampleRate);
+    peaks.reset();
+   #if PRODUCT_SNAPSHOT
+    // The snapshot tool only (ABSeeGuiSnapshot, never the plugin): a reference in slot 1, loaded
+    // inline, so the editor can be rendered with the band deltas and the readout populated.
+    if (const auto* path = std::getenv ("ABSEE_SNAPSHOT_REFERENCE"))
+    {
+        extra.slots[0].path = juce::String::fromUTF8 (path);
+        loader.update (true);
+    }
+   #endif
     for (auto& b : publishedRefBands)
         b.store (absee::kNoLevel);
 
@@ -307,6 +350,7 @@ void ABSeeAudioProcessor::renderChunk (juce::AudioBuffer<float>& chunk, bool wir
     }
     rmsL.store (lastL, std::memory_order_relaxed);
     rmsR.store (lastR, std::memory_order_relaxed);
+    peaks.push (chunk, 0, n);
     publishedRefDb.store (match.referenceTargetDb(), std::memory_order_relaxed);
     publishedMixDb.store (match.mixTargetDb(), std::memory_order_relaxed);
     publishedSide.store (side, std::memory_order_relaxed);
@@ -329,6 +373,8 @@ void ABSeeAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     auto xml = absee::State::toXml (apvts);
     extra.safeOnRender = safety.safeOnRender();
     absee::State::writeExtra (*xml, extra);
+    if (auto* e = xml->getChildByName ("Extra"); e != nullptr && presets->activeId().isNotEmpty())
+        e->setAttribute ("preset", presets->activeId());   // which preset the settings came from, for the header
     copyXmlToBinary (*xml, destData);
 }
 
@@ -355,6 +401,8 @@ bool ABSeeAudioProcessor::loadState (const void* data, int sizeInBytes)
         extra = loaded;
         safety.setSafeOnRender (extra.safeOnRender);
     }
+    const auto* e = state->getChildByName ("Extra");
+    presets->restoreActive (e != nullptr ? e->getStringAttribute ("preset") : juce::String());
     return true;
 }
 

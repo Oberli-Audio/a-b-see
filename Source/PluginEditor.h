@@ -4,33 +4,89 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "PluginProcessor.h"
+#include "oberli/Buttons.h"
+#include "oberli/Knob.h"
+#include "oberli/Meters.h"
+#include "oberli/StripEditor.h"
 
-/*  A B see - the editor.
+/*  A B see - the editor: the family's Strip frame (Source/oberli/StripEditor.h) around the body
+    of docs/sketch.md 2, 960 x 600 at 100 %, Bone, accent Peacock only on what is active.
 
-    The template's editor is a placeholder: the bone background, the product name, one
-    slider per parameter with the table's tooltips, the version. plugin-ui-bob builds the real
-    editor from the Oberli Audio brand sheet at G2 (Strip layout, the knob of the logo, Rubik, the
-    preset drawer, About on the back) and replaces this file; the processor interface stays. */
-class ABSeeAudioProcessorEditor final : public juce::AudioProcessorEditor
+        REFERENCES          | LISTEN  [ Mix | Reference ]  ( Reference +6.0 dB )   | OUTPUT
+        1  Chorus master  o |         [ Match ............ ]  Blind              |  Trim
+        2  Empty            |         Mono  Follow transport  Trim mix instead   |  meter
+        ...                 |         (blind: Prefer X  Prefer Y  Same  Reveal)  |  Match
+        Add...  Clear       | BALANCE  the seven band deltas, the hero           |  target
+        SECTION [Whole 1 2 3 4 Loudest 10 s]
+
+    The hero is what the ear cannot judge: the band deltas (BandDeltas.h, mix minus reference,
+    level matched) and the match readout. Everything it shows is read from the processor's
+    atomics in advanceBody (one frame clock, D.6.2); the blind tally is editor state, lost on
+    close, by design (sketch 4.4). */
+class ABSeeAudioProcessorEditor final : public oberli::ui::StripEditor
 {
 public:
     explicit ABSeeAudioProcessorEditor (ABSeeAudioProcessor&);
-    ~ABSeeAudioProcessorEditor() override = default;
+    ~ABSeeAudioProcessorEditor() override;
 
     void paint (juce::Graphics&) override;
-    void resized() override;
+
+    bool previewDrag (const juce::String& parameterId) override;
+
+    // Audio files dropped on the editor fill a reference slot; presets go to the frame.
+    bool isInterestedInFileDrag (const juce::StringArray& files) override;
+    void filesDropped (const juce::StringArray& files, int x, int y) override;
+
+    /** The slots as the list draws them: message thread. */
+    struct SlotView
+    {
+        juce::String name;      // empty: the slot is empty
+        juce::String problem;   // a load error in plain words, or empty
+        bool loading = false;
+    };
 
 private:
-    ABSeeAudioProcessor& product;
-    juce::TooltipWindow tooltips { this, 500 };
-    struct Control
-    {
-        juce::Slider slider;
-        juce::Label label;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
-    };
-    std::vector<std::unique_ptr<Control>> controls;
-    juce::Label title, version;
+    class SlotList;
+    class DeltaChart;
+    class MatchReadout;
+    class SectionChips;
+
+    void layoutBody (juce::Rectangle<int> area) override;
+    void advanceBody (double now, float dt) override;
+    void presetRecalled (double now) override;
+
+    int activeSlot() const;
+    void selectSlot (int slot);
+    void chooseReference (int slot);
+    void setReference (int slot, const juce::File& file);
+    void vote (int choice);   // 0 prefer X, 1 prefer Y, 2 no difference
+    void reveal();
+    juce::String readoutText() const;
+
+    ABSeeAudioProcessor& audioProcessor;   // not `processor`: AudioProcessorEditor has one (-Wshadow)
+
+    std::unique_ptr<SlotList> slots;
+    std::unique_ptr<DeltaChart> chart;
+    std::unique_ptr<MatchReadout> readout;
+
+    oberli::ui::SegmentedControl listen, listenBlind, match;
+    std::unique_ptr<SectionChips> section;
+    oberli::ui::PillToggle blind, mono, follow, trimMixInstead;
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> pillAttachments;
+    oberli::ui::ActionButton addReference, clearReference;
+    oberli::ui::ActionButton preferX, preferY, noDifference, revealButton;
+    oberli::ui::ParameterKnob trim, matchTarget;
+    oberli::ui::LevelMeter meter;
+    std::unique_ptr<juce::FileChooser> chooser;
+
+    // the blind tally (sketch 4.4): editor state, never saved
+    int votesMix = 0, votesReference = 0, votesSame = 0;
+    bool revealed = false;
+    bool lastBlind = false;
+
+    juce::Rectangle<int> referencesTitle, sectionTitle, sectionCaption, listenTitle, balanceTitle, balanceCaption,
+                         outputTitle, ruleLeft, ruleRight;
+    juce::String sectionText;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ABSeeAudioProcessorEditor)
 };

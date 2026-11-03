@@ -20,6 +20,8 @@
 #include "ReferenceStore.h"
 #include "RenderSafety.h"
 #include "State.h"
+#include "oberli/MeterTaps.h"
+#include "oberli/PresetLibrary.h"
 
 /*  A B see - the processor.
 
@@ -95,6 +97,13 @@ public:
     void setMixAnalyser (std::unique_ptr<absee::MixAnalyser> analyser);
 
     absee::RenderSafety& renderSafety() noexcept { return safety; }
+
+    /** The factory bank and the User folder (State.h's format); the Strip frame works on it. */
+    oberli::PresetLibrary& presetLibrary() noexcept { return *presets; }
+    oberli::PresetHost& presetHost() noexcept { return *presets; }
+
+    /** The output's sample peak and clip flag for the editor's meter (oberli/MeterTaps.h). */
+    oberli::PeakTap& outputPeaks() noexcept { return peaks; }
 
     /** The mix side of the band deltas; its timer drains it, the harness drains it by hand. */
     absee::MixBands& mixBands() noexcept { return mixSpectrum; }
@@ -193,6 +202,8 @@ private:
     absee::BlindRound blind;
     std::unique_ptr<absee::MixAnalyser> mixAnalyser;
     absee::MixBands mixSpectrum;
+    oberli::PeakTap peaks;
+    std::unique_ptr<oberli::PresetLibrary> presets;
     int lastBandSlot = -1, lastBandSection = -1;   // audio thread: a change restarts the mix's average
     absee::State::Extra extra;
     // after the store and the slots it reads: destroyed first, its thread stopped before they go

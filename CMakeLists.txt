@@ -287,6 +287,7 @@ target_compile_definitions(ABSeeGuiSnapshot PRIVATE
     JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_DISPLAY_SPLASH_SCREEN=0 JUCE_REPORT_APP_USAGE=0
     JUCE_STRICT_REFCOUNTEDPOINTER=1 JUCE_STANDALONE_APPLICATION=1
     PRODUCT_IS_INSTRUMENT=$<IF:$<BOOL:${PRODUCT_IS_SYNTH}>,1,0> ${PRODUCT_OBERLI_DEFINITIONS}
+    PRODUCT_SNAPSHOT=1   # A B see: ABSEE_SNAPSHOT_REFERENCE fills slot 1 (PluginProcessor.cpp); the plugin never has it
     JucePlugin_Name="$<TARGET_PROPERTY:ABSee,JUCE_PLUGIN_NAME>" JucePlugin_VersionString="${PROJECT_VERSION}")
 target_link_libraries(ABSeeGuiSnapshot PRIVATE OberliUiData ProductData
     juce::juce_audio_utils juce::juce_dsp juce::juce_audio_formats

@@ -1,9 +1,21 @@
 # Status - A B see 0.1.0 (2026-11-02)
-Tier P, track A (analysis; stages processing, output, analysis), at G5 closed, G6 closed
-(2026-11-02, macOS arm64); next: the editor (plugin-ui-bob), then G7 and the release gate.
-Recipe D.8.1.
+Tier P, track A (analysis; stages processing, output, analysis). Sound: G5 and G6 closed
+(2026-11-02, macOS arm64). Interface (plugin-ui-bob): G1 in the sketch, G2-G4 part-closed
+2026-11-03 (the core of the editor built and measured, the sketch's analysis extras open). Then
+G7 and the release gate. Recipe D.8.1.
 
 ## Waiting for Björn
+- 2026-11-03: **Three findings in the shared editor code, for bob-skills** (worked around here,
+  never edited in `Source/oberli/`): (1) `ParameterKnob::getPreferredWidth` covers the knob and
+  its label but not its value text, so "-14.0 LUFS" was clipped to "-14.0 LU": the output
+  column is a fixed 96 px here; (2) `SegmentedControl` draws no disabled state: the Listen
+  switch is dimmed to 45 % by hand when no reference is loaded; (3) About's bold line is the
+  fixed "Turn it and listen.", which does not fit a tool with nothing to turn: it wants a field
+  in `StripEditor::Info`.
+- 2026-11-03: **The editor is built and validated; look at it** (`docs/ui/panel@1x.png`,
+  `blind@1x.png`, `empty@1x.png`). What the sketch asks and the editor does not have yet is in
+  the Handoff (waveform strip with markers and "Align here", spectrum curves, numbers table,
+  width delta, keys 1-4). Say if the order of those should change.
 - 2026-11-02: **G5 and G6 are closed; the session paused here as asked** (work continues only
   on G5/G6). Next is the editor (plugin-ui-bob, accent peacock, theme Bone, `docs/sketch.md`),
   which is also what the listening checkpoint waits for: without it a reference can only reach
@@ -93,6 +105,28 @@ The Integrated match error is bounded by the 0.1 LU hysteresis by construction (
 the gain only moves when the reading moves by more than 0.1 LU), so 0.070 LU is the
 hysteresis band, not noise. Short 3 s has no hysteresis and reads 0.030 LU.
 
+## Editor (plugin-ui-bob, Tier P; macOS arm64, 2026-11-03)
+`Source/PluginEditor.*` on the Strip frame (`oberli::ui::StripEditor`): 960 x 600 at 100 %,
+Bone, accent Peacock. REFERENCES (eight slot rows: click selects, double-click or Enter chooses
+a file, audio files dropped on a row fill it; Add and Clear; load errors in words), SECTION
+chips (six options, one more than a segmented control holds), LISTEN (the 40 px switch, X / Y in
+blind mode, the match readout on the charcoal bubble, Match, Blind, Mono, Follow transport, Trim
+mix instead, the blind vote row with a tally that is editor state), BALANCE (the seven band
+deltas as the hero, +-2.5 dB "look here" guides, signs and directions hidden in blind mode) and
+OUTPUT (Trim 64 px, the peak meter, Match target, dimmed unless Trim mix instead is on). The
+factory bank is in the frame's preset drawer (`PresetLibrary`), the active preset id in the state.
+
+| Check | Command | Result |
+|---|---|---|
+| Renders | `ABSEE_SNAPSHOT_REFERENCE=<wav> ABSeeGuiSnapshot --scale=1\|1.5\|2 --param=listen=1 --param=matchMode=0.3333 --param=section=0 --param=followTransport=0 --seconds=5 --out=docs/ui/panel@<s>x.png`; also `blind`, `empty`, `--state=drawer\|about\|menu` | `docs/ui/`, read at every step; fixed on the way: Section clipped ("Loudest 10 s"), pills and readout clipped, a scale label under the Sub bar, the empty chart's hint across the centre line, About's text cut off, off LEDs on empty slots |
+| Render metrics | `snapshot_contrast.py docs/ui/<png> --metrics --theme bone` | all renders ok: glow 1.90 / 1.92 / 1.95 % at 1x / 1.5x / 2x, blind 1.95 %, empty 0.62 % (limit 2 %; 28 px bars measured 2.29 %, now 18 px); 6-7 palette colours; nothing brighter than the Bone tokens; lightest large surface #F6F2EB |
+| Text contrast | `snapshot_contrast.py docs/ui/panel@1x.png --text "#5C574F" --box ...` (captions, scale labels on the sunken well, empty rows) and `--text "#039BE5"` (the readout's value on the bubble) | worst 5.46:1 (ink-subtle on surface-sunken), 5.59:1 (accent on #1C1B19), all AA |
+| Code checklist | audio-plugins.md 15, line by line | focus: the slot list and the chips take keyboard focus, a click does not grab it (fixed); names: `setTitle` / descriptions on the four custom components; knobs, scale, modified mark, units, About diagnostics: the shared frame and the table; no `LookAndFeel_V4` remnants |
+| Host interface | `validate_plugin.py --profile full` | PASS with the editor: validator 47/47, pluginval strictness 10 (editor tests included), RTSan suite clean; `ctest --preset all` 12/12 |
+
+Known limit: rule 6 holds with 0.05-0.10 % to spare on the demo material, whose deltas reach
+-4.9 dB; a mix far from its reference in every band draws more accent and can cross 2 %.
+
 ## Live match (G5, plugin, shared meter; macOS arm64, 2026-11-02)
 `test_live_match_lands_within_the_brief`: 12 s of the harness's pink mix (-20 dBFS), the
 `quiet` test reference 6 dB below it, Section Whole, no `--mix-reading` (echo `live`). The
@@ -158,20 +192,22 @@ Plan: 1-9. [x] G1-G5 on Linux (see the gate table) 10. [x] on the Mac: `Source/o
 refreshed (plugin-template 0e7d4f4) 11. [x] the live meter and the shared reference path
 (build C) 12. [x] G6 on the Mac: trap, RTSan, perf on both slices, full validation 13. [x] the
 plugin's own reference loader (build D) 14. [x] feature 3, band deltas (builds E, F) 15. [ ]
-**paused here 2026-11-02 at the end of G6, as Björn asked** 16. [ ] the editor (plugin-ui-bob):
-Listen switch, the seven band deltas as hero (`processor.bandDeltas()`, sign hidden in blind
-mode), the match readout, reference slots with a file chooser into `slotState().path` (the
-loader picks it up), markers and "Align here"; decide then whether `extra.slots` needs a lock
-against a host's `setStateInformation` thread 17. [ ] G7, README, CHANGELOG, notices
+paused 2026-11-02 at the end of G6; continued 2026-11-03 on Björn's "continue" 16. [x] the
+editor's core (table above) 16b. [ ] the sketch's rest, in this order: the waveform strip with
+the four markers (drag to set, typed values) and "Align here" (writes `alignDawSeconds` /
+`alignRefSeconds` from the host position), keys 1-4 for the sections, the spectrum curves
+(mix in ink, reference in accent, after the match), the numbers table (LUFS I / S, LRA, TP,
+PSR, mix / reference / delta), the width delta line; decide then whether `extra.slots` needs a
+lock against a host's `setStateInformation` thread 17. [ ] G7, README, CHANGELOG, notices
 (ship-bob) 18. [ ] the two Ableton host checks and the listening checkpoint (Björn).
 Working tree: clean after the checkpoint commit. Build: green on macOS (universal, LTO, signed
 ad hoc), no warnings in `Source/` or `tools/`.
-Tests: `ctest --preset all` -> 12/12; `validate_plugin.py full` -> PASS.
+Tests: `ctest --preset all` -> 12/12; `validate_plugin.py full` -> PASS (with the editor).
 Python: CMake must find a python3 with numpy and scipy, or the suite is silently not
 registered. On this Mac it found Homebrew's 3.12 (no numpy) first; configured with
 `-DPython3_EXECUTABLE=/usr/bin/python3` (cached in `build/` and `build-rtsan/`).
 Open questions for the owner: the Waiting-for-Björn lines above.
-Next command: the editor, with plugin-ui-bob; before it, `cmake --build --preset release && ctest --preset all`.
+Next command: `cmake --build --preset release && ctest --preset all`, then the waveform strip (16b).
 
 The prototype's renders are **not** committed: `.gitignore` keeps WAVs out of this repo
 (project policy, CLAUDE.md) and the renders are reproducible in one seeded command
